@@ -170,7 +170,7 @@ function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = f
   if (isManuallyActive) return 'ACTIVE';
 
   const window = parseSessionTimeWindow(sessionTimeStr);
-  if (!window) return 'PENDING';
+  if (!window) return 'UPCOMING';
 
   const now = new Date();
   const year = now.getFullYear();
@@ -194,7 +194,7 @@ function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = f
     if (currentMins > window.endMins) {
       return 'COMPLETED';
     }
-    return 'PENDING';
+    return 'UPCOMING';
   }
 
   // Handle yesterday's date crossing midnight
@@ -215,9 +215,9 @@ function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = f
   }
 
   if (examDateStr < todayStr) return 'COMPLETED';
-  if (examDateStr > todayStr) return 'PENDING';
+  if (examDateStr > todayStr) return 'UPCOMING';
 
-  return 'PENDING';
+  return 'UPCOMING';
 }
 
 function isCurrentTimeInSessionSlot(examDateStr, sessionTimeStr) {
@@ -572,8 +572,8 @@ class AppStorage {
 
     let exam = this.db.exams.find(e => e.status === 'ACTIVE');
     if (!exam && this.db.exams.length > 0) {
-      const pending = this.db.exams.find(e => e.status === 'PENDING' || e.status === 'UPCOMING');
-      exam = pending || this.db.exams[this.db.exams.length - 1];
+      const upcoming = this.db.exams.find(e => e.status === 'UPCOMING');
+      exam = upcoming || this.db.exams[this.db.exams.length - 1];
     }
     return exam ? { ...exam, sets: JSON.parse(exam.sets_json || '["Set A","Set B","Set C","Set D"]') } : null;
   }
