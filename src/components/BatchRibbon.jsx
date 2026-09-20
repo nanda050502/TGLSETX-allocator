@@ -59,20 +59,20 @@ export default function BatchRibbon({ batches = [], selectedBatchId, onSelectBat
             </span>
           );
         } else {
-          // UPCOMING SESSION - Neutral Slate/Sky Box
+          // PENDING SESSION - Slate/Amber Tinted Neutral Box
           containerClass = isSelected
             ? "bg-slate-900 text-white border-slate-900 shadow-subtle"
             : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90";
 
           badgeElement = (
             <span
-              className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${
+              className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
                 isSelected
-                  ? 'bg-slate-800 text-slate-300 border-slate-700'
-                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                  ? 'bg-slate-800 text-amber-300 border-slate-700'
+                  : 'bg-amber-50/80 text-amber-700 border-amber-200/80'
               }`}
             >
-              Upcoming
+              Pending
             </span>
           );
         }
