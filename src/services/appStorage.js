@@ -517,7 +517,7 @@ class AppStorage {
       sets_json: JSON.stringify(validSets),
       google_sheet_url: google_sheet_url || '',
       google_sheet_webhook_url: google_sheet_webhook_url || '',
-      status: 'ACTIVE',
+      status: getBatchSessionStatus(exam_date || new Date().toISOString().split('T')[0], session_time || '09:00 AM'),
       created_at: new Date().toISOString()
     };
 
@@ -1241,7 +1241,7 @@ class AppStorage {
             sets_json: JSON.stringify(['Set A', 'Set B', 'Set C', 'Set D']),
             google_sheet_url: '',
             google_sheet_webhook_url: '',
-            status: 'ACTIVE',
+            status: getBatchSessionStatus(g.date, g.assessment_time),
             created_at: new Date().toISOString()
           };
           this.db.exams.push(exam);

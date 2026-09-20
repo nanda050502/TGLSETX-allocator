@@ -18,7 +18,7 @@ export default function BatchRibbon({ batches = [], selectedBatchId, onSelectBat
         const sessionState = getBatchSessionStatus(
           b.exam_date,
           b.session_time,
-          b.status === 'ACTIVE'
+          b.status === 'MANUAL_ACTIVE'
         );
 
         let containerClass = "";
