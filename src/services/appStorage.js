@@ -116,7 +116,7 @@ function parseSessionTimeWindow(sessionTimeStr) {
   const parts = str.split(/\s*(?:-|–|to)\s*/i);
   if (parts.length < 1) return null;
 
-  const parseSingleTimeStr = (tStr, isEnd = false) => {
+  const parseSingleTimeStr = (tStr, defaultAmPm = null) => {
     if (!tStr) return null;
     const clean = tStr.trim();
     const match = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
@@ -124,23 +124,14 @@ function parseSessionTimeWindow(sessionTimeStr) {
 
     let hrs = parseInt(match[1], 10);
     const mins = match[2] ? parseInt(match[2], 10) : 0;
-    let ampm = match[3] ? match[3].toUpperCase() : null;
-
-    // Smart daytime normalization for university exam schedules:
-    // If hrs is 8, 9, 10, 11 and AM/PM is missing or PM by mistake in a daytime schedule, normalize to AM
-    if (!isEnd && hrs >= 8 && hrs <= 11) {
-      ampm = 'AM';
-    }
-    // If hrs is 1, 2, 3, 4, 5, 6, 7 and AM/PM is missing or AM by mistake following noon, normalize to PM
-    if (isEnd && hrs >= 1 && hrs <= 7 && (!ampm || ampm === 'AM')) {
-      ampm = 'PM';
-    }
+    
+    // Respect explicit AM/PM tag if provided in the string!
+    let ampm = match[3] ? match[3].toUpperCase() : defaultAmPm;
 
     if (!ampm) {
       if (hrs >= 8 && hrs <= 11) ampm = 'AM';
       else if (hrs === 12) ampm = 'PM';
-      else if (hrs >= 1 && hrs <= 7) ampm = 'PM';
-      else ampm = 'AM';
+      else ampm = 'PM';
     }
 
     if (ampm === 'PM' && hrs < 12) hrs += 12;
@@ -149,23 +140,27 @@ function parseSessionTimeWindow(sessionTimeStr) {
     return hrs * 60 + mins;
   };
 
-  let startMins = parseSingleTimeStr(parts[0], false);
-  if (startMins === null) return null;
+  const hasAmPmEnd = parts[1] && /(AM|PM)/i.test(parts[1]);
+  const endAmPm = hasAmPmEnd ? parts[1].match(/(AM|PM)/i)[1].toUpperCase() : null;
+  const hasAmPmStart = /(AM|PM)/i.test(parts[0]);
+  const startAmPm = hasAmPmStart ? parts[0].match(/(AM|PM)/i)[1].toUpperCase() : endAmPm;
 
-  let endMins;
-  if (parts[1]) {
-    endMins = parseSingleTimeStr(parts[1], true);
+  let startMins = parseSingleTimeStr(parts[0], startAmPm);
+  let endMins = parts[1] ? parseSingleTimeStr(parts[1], endAmPm || startAmPm) : startMins + 60;
 
-    // Fix typo: '12:00 PM - 01:00 AM' -> 12:00 PM to 1:00 PM (720 to 780 mins)
-    if (startMins === 720 && endMins === 60) endMins = 780;
-    // Fix typo: '11:00 PM - 12:00 PM' -> 11:00 AM to 12:00 PM (660 to 720 mins)
-    if (startMins === 1380 && endMins === 720) startMins = 660;
+  // Correction 1: '11:00 PM - 12:00 PM' -> 11:00 PM (1380) to 12:00 AM Midnight (1440)
+  if (startMins === 1380 && endMins === 720) {
+    endMins = 1440;
+  }
 
-    if (endMins !== null && endMins <= startMins) {
-      endMins += 24 * 60;
-    }
-  } else {
-    endMins = startMins + 60;
+  // Correction 2: '12:00 PM - 01:00 AM' in night shift sequence -> 12:00 AM Midnight (1440) to 01:00 AM (1500)
+  if (startMins === 720 && endMins === 60) {
+    startMins = 1440;
+    endMins = 1500;
+  }
+
+  if (startMins !== null && endMins !== null && endMins <= startMins) {
+    endMins += 24 * 60;
   }
 
   return { startMins, endMins };
@@ -175,6 +170,7 @@ function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = f
   if (isManuallyActive) return 'ACTIVE';
 
   const window = parseSessionTimeWindow(sessionTimeStr);
+  if (!window) return 'UPCOMING';
 
   const now = new Date();
   const year = now.getFullYear();
@@ -182,10 +178,16 @@ function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = f
   const day = String(now.getDate()).padStart(2, '0');
   const todayStr = `${year}-${month}-${day}`;
 
-  const currentMins = now.getHours() * 60 + now.getMinutes();
+  let currentMins = now.getHours() * 60 + now.getMinutes();
+
+  // If slot crosses midnight (e.g. 12 AM to 1 AM = 1440 to 1500 mins) and current time is past midnight (00:00 to 05:00 AM)
+  if (window.startMins >= 1440 || window.endMins > 1440) {
+    if (currentMins < 480) {
+      currentMins += 1440;
+    }
+  }
 
   if (!examDateStr || examDateStr === todayStr) {
-    if (!window) return 'UPCOMING';
     if (currentMins >= window.startMins && currentMins <= window.endMins) {
       return 'ACTIVE';
     }
@@ -195,7 +197,7 @@ function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = f
     return 'UPCOMING';
   }
 
-  // Handle overnight slot from yesterday crossing midnight
+  // Handle yesterday's date crossing midnight
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const yYear = yesterday.getFullYear();
@@ -203,10 +205,12 @@ function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = f
   const yDay = String(yesterday.getDate()).padStart(2, '0');
   const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
 
-  if (examDateStr === yesterdayStr && window && window.endMins > 24 * 60) {
-    const overnightEndMins = window.endMins - 24 * 60;
-    if (currentMins <= overnightEndMins) {
+  if (examDateStr === yesterdayStr && (window.startMins >= 1440 || window.endMins > 1440)) {
+    if (currentMins >= window.startMins && currentMins <= window.endMins) {
       return 'ACTIVE';
+    }
+    if (currentMins > window.endMins) {
+      return 'COMPLETED';
     }
   }
 
