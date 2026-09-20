@@ -15,11 +15,11 @@ export default function BatchRibbon({ batches = [], selectedBatchId, onSelectBat
 
       {batches.map((b) => {
         const isSelected = String(selectedBatchId) === String(b.id);
-        const sessionState = getBatchSessionStatus(
-          b.exam_date,
-          b.session_time,
-          b.status === 'MANUAL_ACTIVE'
-        );
+        const sessionState = b.status === 'ACTIVE'
+          ? 'ACTIVE'
+          : (b.status === 'COMPLETED'
+              ? 'COMPLETED'
+              : getBatchSessionStatus(b.exam_date, b.session_time, b.status === 'MANUAL_ACTIVE'));
 
         let containerClass = "";
         let badgeElement = null;

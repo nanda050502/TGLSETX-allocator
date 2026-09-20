@@ -41,12 +41,25 @@ export default function FacultyAttendance({ defaultRoomNumber, isAndroidShell = 
   useEffect(() => {
     if (roomNumber) {
       fetchRoomData(roomNumber);
+
+      const handleLifecycleChange = () => {
+        const rooms = appStorage.getAvailableRooms();
+        setAvailableRooms(rooms || []);
+        fetchRoomData(roomNumber, true);
+      };
+
+      window.addEventListener('examset_batch_lifecycle_change', handleLifecycleChange);
+
       const interval = setInterval(() => {
         const rooms = appStorage.getAvailableRooms();
         setAvailableRooms(rooms || []);
         fetchRoomData(roomNumber, true);
-      }, 4000);
-      return () => clearInterval(interval);
+      }, 2500);
+
+      return () => {
+        window.removeEventListener('examset_batch_lifecycle_change', handleLifecycleChange);
+        clearInterval(interval);
+      };
     } else {
       setLoading(false);
     }

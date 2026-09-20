@@ -41,13 +41,31 @@ export default function LiveMonitoring({ onSwitchToRoom, onOpenGoogleSheetModal 
 
   useEffect(() => {
     fetchExamsList();
+
+    const handleLifecycleChange = (e) => {
+      fetchExamsList();
+      const newActive = e.detail?.activeExam;
+      if (newActive) {
+        setSelectedExamId(newActive.id);
+      }
+      if (selectedExamId) {
+        fetchOverview(true);
+      }
+    };
+
+    window.addEventListener('examset_batch_lifecycle_change', handleLifecycleChange);
+
     const interval = setInterval(() => {
       fetchExamsList();
       if (selectedExamId) {
         fetchOverview(true);
       }
-    }, 4000);
-    return () => clearInterval(interval);
+    }, 2500);
+
+    return () => {
+      window.removeEventListener('examset_batch_lifecycle_change', handleLifecycleChange);
+      clearInterval(interval);
+    };
   }, [selectedExamId]);
 
   useEffect(() => {

@@ -309,6 +309,13 @@ class AppStorage {
       }
     }
 
+    this.evaluateBatchLifecycles();
+    if (!this.lifecycleInterval) {
+      this.lifecycleInterval = setInterval(() => {
+        this.evaluateBatchLifecycles();
+      }, 2000);
+    }
+
     if (isSupabaseConfigured && supabase) {
       this.syncFromCloud();
       if (!this.syncInterval) {
@@ -480,36 +487,99 @@ class AppStorage {
     }).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }));
   }
 
-  // Exam Methods
-  getActiveExam() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-
-    // Auto-detect batch whose session_time matches current time
-    const timeMatchingExam = this.db.exams.find(e => e.exam_date === todayStr && isCurrentTimeInSessionSlot(e.exam_date, e.session_time));
-    if (timeMatchingExam) {
-      if (timeMatchingExam.status !== 'ACTIVE') {
-        this.db.exams.forEach(e => {
-          if (String(e.id) === String(timeMatchingExam.id)) e.status = 'ACTIVE';
-          else if (e.status === 'ACTIVE') e.status = 'COMPLETED';
-        });
-        this.save();
-        this.pushToCloud('exams', this.db.exams);
-      }
-      return { ...timeMatchingExam, sets: JSON.parse(timeMatchingExam.sets_json || '["Set A","Set B","Set C","Set D"]') };
+  // Exam Methods & Continuous Lifecycle Engine
+  evaluateBatchLifecycles() {
+    if (!this.db || !Array.isArray(this.db.exams) || this.db.exams.length === 0) {
+      return null;
     }
+
+    let statusChanged = false;
+
+    // 1. Evaluate candidate status for each batch
+    const evaluatedExams = this.db.exams.map(exam => {
+      const calcStatus = getBatchSessionStatus(
+        exam.exam_date,
+        exam.session_time,
+        exam.status === 'MANUAL_ACTIVE'
+      );
+      return { ...exam, calcStatus };
+    });
+
+    // 2. Identify candidate ACTIVE batch
+    const activeCandidates = evaluatedExams.filter(e => e.calcStatus === 'ACTIVE');
+    const activeExamId = activeCandidates.length > 0 ? activeCandidates[0].id : null;
+
+    // 3. Update exam status strictly enforcing single-active invariant
+    this.db.exams.forEach(exam => {
+      let targetStatus;
+      if (activeExamId) {
+        if (String(exam.id) === String(activeExamId)) {
+          targetStatus = 'ACTIVE';
+        } else {
+          const calc = getBatchSessionStatus(exam.exam_date, exam.session_time);
+          targetStatus = calc === 'ACTIVE' ? 'COMPLETED' : calc;
+        }
+      } else {
+        // No batch currently in active time slot (e.g. gap between batches)
+        targetStatus = getBatchSessionStatus(exam.exam_date, exam.session_time);
+      }
+
+      if (exam.status !== targetStatus) {
+        exam.status = targetStatus;
+        statusChanged = true;
+      }
+    });
+
+    // 4. Guarantee strict SINGLE-ACTIVE enforcement (safety check)
+    const activeCount = this.db.exams.filter(e => e.status === 'ACTIVE').length;
+    if (activeCount > 1) {
+      let keptOne = false;
+      this.db.exams.forEach(e => {
+        if (e.status === 'ACTIVE') {
+          if (!keptOne) {
+            keptOne = true;
+          } else {
+            e.status = 'COMPLETED';
+            statusChanged = true;
+          }
+        }
+      });
+    }
+
+    // 5. Save changes, sync to Supabase, and trigger custom event if status transitioned
+    if (statusChanged) {
+      this.save();
+      this.pushToCloud('exams', this.db.exams);
+      if (typeof window !== 'undefined') {
+        const activeExam = this.db.exams.find(e => e.status === 'ACTIVE') || null;
+        window.dispatchEvent(new CustomEvent('examset_batch_lifecycle_change', {
+          detail: {
+            exams: this.db.exams,
+            activeExam
+          }
+        }));
+      }
+    }
+
+    const currentActive = this.db.exams.find(e => e.status === 'ACTIVE');
+    return currentActive
+      ? { ...currentActive, sets: JSON.parse(currentActive.sets_json || '["Set A","Set B","Set C","Set D"]') }
+      : null;
+  }
+
+  getActiveExam() {
+    this.evaluateBatchLifecycles();
 
     let exam = this.db.exams.find(e => e.status === 'ACTIVE');
     if (!exam && this.db.exams.length > 0) {
-      exam = this.db.exams[this.db.exams.length - 1];
+      const upcoming = this.db.exams.find(e => e.status === 'UPCOMING');
+      exam = upcoming || this.db.exams[this.db.exams.length - 1];
     }
     return exam ? { ...exam, sets: JSON.parse(exam.sets_json || '["Set A","Set B","Set C","Set D"]') } : null;
   }
 
   getExams() {
+    this.evaluateBatchLifecycles();
     return this.db.exams.map(e => ({
       ...e,
       sets: JSON.parse(e.sets_json || '["Set A","Set B","Set C","Set D"]')
@@ -518,11 +588,26 @@ class AppStorage {
 
   switchActiveExam(examId) {
     this.db.exams.forEach(e => {
-      if (String(e.id) === String(examId)) e.status = 'ACTIVE';
-      else if (e.status === 'ACTIVE') e.status = 'COMPLETED';
+      if (String(e.id) === String(examId)) {
+        e.status = 'ACTIVE';
+      } else {
+        const calc = getBatchSessionStatus(e.exam_date, e.session_time);
+        e.status = calc === 'ACTIVE' ? 'COMPLETED' : calc;
+      }
     });
+
     this.save();
     this.pushToCloud('exams', this.db.exams);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('examset_batch_lifecycle_change', {
+        detail: {
+          exams: this.db.exams,
+          activeExam: this.getActiveExam()
+        }
+      }));
+    }
+
     return { success: true, message: `Exam #${examId} is now ACTIVE` };
   }
 
