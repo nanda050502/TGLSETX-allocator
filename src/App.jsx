@@ -12,6 +12,7 @@ import FacultyAttendance from './pages/faculty/FacultyAttendance';
 import DataIngestion from './pages/admin/DataIngestion';
 import ExamManager from './pages/admin/ExamManager';
 import FacultyManager from './pages/admin/FacultyManager';
+import UserManagement from './pages/admin/UserManagement';
 import AuditLogs from './pages/admin/AuditLogs';
 import GoogleSheetSetupModal from './components/GoogleSheetSetupModal';
 import { RefreshCw, LogOut, ArrowLeft } from 'lucide-react';
@@ -174,6 +175,10 @@ function MainApp() {
             setActiveTab('students');
           }}
         />
+      )}
+
+      {activeTab === 'users-manage' && (
+        <UserManagement />
       )}
 
       {activeTab === 'exam-config' && (

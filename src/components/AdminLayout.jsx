@@ -38,6 +38,7 @@ export default function AdminLayout({ activeTab, setActiveTab, examInfo, onOpenG
       title: 'Administration & Setup',
       items: [
         { id: 'ingestion', label: 'Data Ingestion', icon: UploadCloud },
+        { id: 'users-manage', label: 'User Management', icon: ShieldCheck },
         { id: 'exam-config', label: 'Sets & Config', icon: Sliders },
         { id: 'faculty-manage', label: 'Faculty Allocations', icon: UserCheck },
         { id: 'audit-logs', label: 'Audit Timeline', icon: Clock }

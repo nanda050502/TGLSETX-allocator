@@ -1174,9 +1174,76 @@ class AppStorage {
     };
   }
 
-  // Faculty Management
+  // User & Faculty Management
+  getAllUsers() {
+    return this.db.users || [];
+  }
+
   getFacultyList() {
-    return this.db.users.filter(u => u.role === 'FACULTY');
+    return (this.db.users || []).filter(u => u.role === 'FACULTY');
+  }
+
+  createUser(data) {
+    const { username, password, name, role, email, room_number } = data;
+    if (!username || !password || !name) {
+      return { success: false, error: 'Username, password, and name are required' };
+    }
+
+    const exists = (this.db.users || []).find(u => u.username.toLowerCase() === username.trim().toLowerCase());
+    if (exists) {
+      return { success: false, error: `Username "${username}" already exists` };
+    }
+
+    const newId = Date.now();
+    const newUser = {
+      id: newId,
+      username: username.trim(),
+      password: password.trim(),
+      name: name.trim(),
+      role: role || 'FACULTY',
+      email: email ? email.trim() : `${username.trim()}@tgl2026.edu`,
+      room_number: room_number ? String(room_number).trim() : ''
+    };
+
+    if (!this.db.users) this.db.users = [];
+    this.db.users.push(newUser);
+    this.save();
+    return { success: true, user: newUser, message: 'User created successfully' };
+  }
+
+  updateUser(id, data) {
+    const user = (this.db.users || []).find(u => String(u.id) === String(id));
+    if (!user) return { success: false, error: 'User not found' };
+
+    if (data.name) user.name = data.name.trim();
+    if (data.username) {
+      const exists = (this.db.users || []).find(u => String(u.id) !== String(id) && u.username.toLowerCase() === data.username.trim().toLowerCase());
+      if (exists) return { success: false, error: `Username "${data.username}" is taken by another user` };
+      user.username = data.username.trim();
+    }
+    if (data.password) user.password = data.password.trim();
+    if (data.role) user.role = data.role;
+    if (data.email !== undefined) user.email = data.email.trim();
+    if (data.room_number !== undefined) user.room_number = String(data.room_number).trim();
+
+    this.save();
+    return { success: true, message: 'User updated successfully' };
+  }
+
+  deleteUser(id) {
+    if (!this.db.users) return { success: false, error: 'No users found' };
+    const idx = this.db.users.findIndex(u => String(u.id) === String(id));
+    if (idx === -1) return { success: false, error: 'User not found' };
+
+    const user = this.db.users[idx];
+    const adminCount = this.db.users.filter(u => u.role === 'ADMIN').length;
+    if (user.role === 'ADMIN' && adminCount <= 1) {
+      return { success: false, error: 'Cannot delete the last remaining admin account' };
+    }
+
+    this.db.users.splice(idx, 1);
+    this.save();
+    return { success: true, message: 'User deleted successfully' };
   }
 
   assignRoomFaculty(roomNumber, facultyId, roomPin, examId = null) {
