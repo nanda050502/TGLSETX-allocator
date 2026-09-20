@@ -66,7 +66,7 @@ sequenceDiagram
 - **Interactive Swipe Roster**:
   - **Swipe Right**: Mark Candidate Present (auto-assigns chronological paper set + records timestamp).
   - **Swipe Left**: Undo / Mark Absent.
-- **Room PIN & Headcount Progress Card**: Shows live verification progress bar (`80% Verified`) alongside the current Room PIN (`🔑 PIN: 1234`).
+- **Room PIN & Headcount Progress Card**: Shows live verification progress bar (`80% Verified`) alongside the current Room PIN .
 - **Android Material Finalization Dialog**: Custom touch modal to verify physical head count and lock room attendance.
 - **Numeric Dialpad Drawer**: Built-in dialpad for rapid roll-number searches during peak check-in.
 
