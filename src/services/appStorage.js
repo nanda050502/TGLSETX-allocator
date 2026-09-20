@@ -1410,6 +1410,7 @@ class AppStorage {
     }
 
     this.save();
+    this.evaluateBatchLifecycles();
     this.pushToCloud('exams', createdExams);
     this.pushToCloud('rooms', createdRooms);
     this.pushToCloud('students', createdStudents);
