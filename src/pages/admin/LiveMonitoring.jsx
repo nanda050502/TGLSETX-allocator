@@ -12,11 +12,14 @@ export default function LiveMonitoring({ onSwitchToRoom, onOpenGoogleSheetModal 
 
   const fetchExamsList = () => {
     try {
+      const activeExam = appStorage.getActiveExam();
       const list = appStorage.getExams();
       setExamsList(list);
-      if (list.length > 0 && !selectedExamId) {
-        const active = list.find(e => e.status === 'ACTIVE') || list[0];
-        setSelectedExamId(active.id);
+      if (list.length > 0) {
+        if (!selectedExamId) {
+          const active = activeExam || list.find(e => e.status === 'ACTIVE') || list[0];
+          setSelectedExamId(active.id);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -38,7 +41,14 @@ export default function LiveMonitoring({ onSwitchToRoom, onOpenGoogleSheetModal 
 
   useEffect(() => {
     fetchExamsList();
-  }, []);
+    const interval = setInterval(() => {
+      fetchExamsList();
+      if (selectedExamId) {
+        fetchOverview(true);
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [selectedExamId]);
 
   useEffect(() => {
     if (selectedExamId) {

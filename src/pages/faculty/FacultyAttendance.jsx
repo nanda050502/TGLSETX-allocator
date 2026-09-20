@@ -41,6 +41,12 @@ export default function FacultyAttendance({ defaultRoomNumber, isAndroidShell = 
   useEffect(() => {
     if (roomNumber) {
       fetchRoomData(roomNumber);
+      const interval = setInterval(() => {
+        const rooms = appStorage.getAvailableRooms();
+        setAvailableRooms(rooms || []);
+        fetchRoomData(roomNumber, true);
+      }, 4000);
+      return () => clearInterval(interval);
     } else {
       setLoading(false);
     }
