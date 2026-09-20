@@ -228,21 +228,46 @@ function standardizeDate(rawDate) {
   if (!rawDate) return new Date().toISOString().split('T')[0];
   if (typeof rawDate === 'number') {
     const dateObj = new Date((rawDate - (25567 + 2)) * 86400 * 1000);
-    return dateObj.toISOString().split('T')[0];
+    if (!isNaN(dateObj.getTime())) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
   }
+
   const str = String(rawDate).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-  const ddmmyyyy = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
-  if (ddmmyyyy) {
-    const day = String(ddmmyyyy[1]).padStart(2, '0');
-    const month = String(ddmmyyyy[2]).padStart(2, '0');
-    const year = ddmmyyyy[3];
+
+  const partsMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (partsMatch) {
+    const p1 = parseInt(partsMatch[1], 10);
+    const p2 = parseInt(partsMatch[2], 10);
+    const year = partsMatch[3];
+
+    let month, day;
+    if (p1 > 12) {
+      day = String(p1).padStart(2, '0');
+      month = String(p2).padStart(2, '0');
+    } else if (p2 > 12) {
+      month = String(p1).padStart(2, '0');
+      day = String(p2).padStart(2, '0');
+    } else {
+      month = String(p1).padStart(2, '0');
+      day = String(p2).padStart(2, '0');
+    }
+
     return `${year}-${month}-${day}`;
   }
+
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split('T')[0];
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
+
   return new Date().toISOString().split('T')[0];
 }
 
@@ -1144,7 +1169,7 @@ class AppStorage {
 
     for (const r of rows) {
       if (!r.roll_number || !r.room_number) continue;
-      const dateKey = r.date || new Date().toISOString().split('T')[0];
+      const dateKey = standardizeDate(r.date);
       const batchKey = r.batch || 'Batch 1';
       const timeKey = r.assessment_time || '08:00 AM - 10:00 AM';
       const groupKey = `${dateKey}___${batchKey}___${timeKey}`;
