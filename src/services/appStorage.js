@@ -1284,6 +1284,8 @@ class AppStorage {
             const newRoomId = generateId();
             room = { id: newRoomId, exam_id: examId, room_number: roomNo, faculty_id: null, room_pin: pin, current_set_index: 0 };
             this.db.rooms.push(room);
+          }
+          if (!createdRooms.some(r => String(r.id) === String(room.id))) {
             createdRooms.push(room);
           }
 
