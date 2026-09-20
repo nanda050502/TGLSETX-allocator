@@ -18,7 +18,68 @@ function generateId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return 'id-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function sanitizeRow(table, row) {
+  if (!row || typeof row !== 'object') return row;
+  
+  if (table === 'students') {
+    const allowed = [
+      'id', 'exam_id', 'room_number', 'roll_number', 'name', 'email', 
+      'department', 'batch_name', 'assessment_time', 'exam_date', 'status', 
+      'assigned_set', 'checkin_time', 'is_late', 'late_minutes', 'draft_order', 
+      'marked_by_user_id', 'synced_to_sheet', 'created_at'
+    ];
+    const clean = {};
+    for (const key of allowed) {
+      if (row[key] !== undefined && row[key] !== null) clean[key] = row[key];
+    }
+    return clean;
+  }
+
+  if (table === 'rooms') {
+    const allowed = [
+      'id', 'exam_id', 'room_number', 'faculty_id', 'faculty_name', 
+      'room_pin', 'current_set_index', 'room_finalized', 'finalized_at', 'draft_counter'
+    ];
+    const clean = {};
+    for (const key of allowed) {
+      if (row[key] !== undefined && row[key] !== null) clean[key] = row[key];
+    }
+    return clean;
+  }
+
+  if (table === 'exams') {
+    const allowed = [
+      'id', 'name', 'subject_code', 'exam_date', 'session_time', 
+      'sets_json', 'google_sheet_url', 'google_sheet_webhook_url', 
+      'status', 'gate_closed', 'gate_closed_at', 'created_at'
+    ];
+    const clean = {};
+    for (const key of allowed) {
+      if (row[key] !== undefined && row[key] !== null) clean[key] = row[key];
+    }
+    return clean;
+  }
+
+  if (table === 'attendance_logs') {
+    const allowed = [
+      'id', 'exam_id', 'student_id', 'room_number', 'roll_number', 
+      'student_name', 'action', 'assigned_set', 'timestamp', 
+      'marked_by_user_id', 'created_at'
+    ];
+    const clean = {};
+    for (const key of allowed) {
+      if (row[key] !== undefined && row[key] !== null) clean[key] = row[key];
+    }
+    return clean;
+  }
+
+  return row;
 }
 
 /**
@@ -206,7 +267,8 @@ class AppStorage {
   async pushToCloud(table, rows) {
     if (!isSupabaseConfigured || !supabase || !rows || rows.length === 0) return;
     try {
-      const rowsToPush = Array.isArray(rows) ? rows : [rows];
+      const rowsArray = Array.isArray(rows) ? rows : [rows];
+      const rowsToPush = rowsArray.map(r => sanitizeRow(table, r));
       const { error } = await supabase.from(table).upsert(rowsToPush);
       if (error) {
         console.warn(`Supabase upsert error on ${table}:`, error.message);
