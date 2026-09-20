@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { appStorage } from '../../services/appStorage';
+import BatchRibbon from '../../components/BatchRibbon';
 import { Users, CheckCircle2, XCircle, Award, RefreshCw, Sheet, ArrowRight, Activity, RotateCcw, AlertTriangle, Clock, Lock, Unlock, X } from 'lucide-react';
 
 export default function LiveMonitoring({ onSwitchToRoom, onOpenGoogleSheetModal }) {
@@ -110,31 +111,12 @@ export default function LiveMonitoring({ onSwitchToRoom, onOpenGoogleSheetModal 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans min-w-0 max-w-full">
       {/* Batch Selector Tab Strip */}
-      {examsList.length > 1 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-xs font-semibold text-slate-500 shrink-0">Batches:</span>
-          {examsList.map((e) => {
-            const isSelected = selectedExamId === e.id;
-            return (
-              <button
-                key={e.id}
-                onClick={() => setSelectedExamId(e.id)}
-                className={`touch-target px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition flex items-center gap-1.5 border focus-ring ${
-                  isSelected
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-subtle'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                <span>{e.name}</span>
-                {e.session_time && (
-                  <span className={`text-[10px] font-mono ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
-                    ({e.session_time})
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      {examsList.length > 0 && (
+        <BatchRibbon
+          batches={examsList}
+          selectedBatchId={selectedExamId}
+          onSelectBatch={setSelectedExamId}
+        />
       )}
 
       {/* Overview Header Card */}

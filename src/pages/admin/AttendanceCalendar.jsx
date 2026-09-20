@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { appStorage } from '../../services/appStorage';
+import BatchRibbon from '../../components/BatchRibbon';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -452,31 +453,12 @@ export default function AttendanceCalendar({ onOpenRoomCheckin, onExamActivated 
             ) : (
               <div className="space-y-6">
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5">
-                    Exam Sessions
-                  </div>
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    {dateData.batches.map((b) => {
-                      const isSelected = selectedBatchId === b.id;
-                      return (
-                        <button
-                          key={b.id}
-                          onClick={() => setSelectedBatchId(b.id)}
-                          className={`touch-target px-4 py-2 rounded-xl text-xs font-semibold transition shrink-0 flex items-center gap-2 border focus-ring ${
-                            isSelected
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-subtle'
-                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span className="font-mono">{b.subject_code}</span>
-                          <span>{b.name}</span>
-                          {b.status === 'ACTIVE' && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <BatchRibbon
+                    label="Exam Sessions:"
+                    batches={dateData.batches}
+                    selectedBatchId={selectedBatchId}
+                    onSelectBatch={setSelectedBatchId}
+                  />
                 </div>
 
                 {activeBatch && (

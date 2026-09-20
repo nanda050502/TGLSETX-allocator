@@ -110,36 +110,85 @@ function calculateLateStatus(checkinTimeStr, sessionTimeStr, graceMins = 15) {
   return { is_late: false, late_minutes: 0 };
 }
 
-function isCurrentTimeInSessionSlot(examDateStr, sessionTimeStr) {
-  if (!examDateStr || !sessionTimeStr) return false;
+function parseSessionTimeWindow(sessionTimeStr) {
+  if (!sessionTimeStr) return null;
+  const str = String(sessionTimeStr).trim();
+  const parts = str.split(/\s*(?:-|–|to)\s*/i);
+  if (parts.length === 0) return null;
+
+  const parseSingleTimeStr = (tStr, defaultAmPm = null) => {
+    if (!tStr) return null;
+    const clean = tStr.trim();
+    const match = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+    if (!match) return null;
+
+    let hrs = parseInt(match[1], 10);
+    const mins = match[2] ? parseInt(match[2], 10) : 0;
+    let ampm = match[3] ? match[3].toUpperCase() : defaultAmPm;
+
+    if (!ampm) {
+      if (hrs >= 8 && hrs <= 11) ampm = 'AM';
+      else if (hrs === 12) ampm = 'PM';
+      else if (hrs >= 1 && hrs <= 7) ampm = 'PM';
+      else ampm = 'AM';
+    }
+
+    if (ampm === 'PM' && hrs < 12) hrs += 12;
+    if (ampm === 'AM' && hrs === 12) hrs = 0;
+
+    return hrs * 60 + mins;
+  };
+
+  const hasAmPmEnd = parts[1] && /(AM|PM)/i.test(parts[1]);
+  const endAmPm = hasAmPmEnd ? parts[1].match(/(AM|PM)/i)[1].toUpperCase() : null;
+
+  const hasAmPmStart = /(AM|PM)/i.test(parts[0]);
+  const startAmPm = hasAmPmStart ? parts[0].match(/(AM|PM)/i)[1].toUpperCase() : (hasAmPmEnd ? endAmPm : null);
+
+  const startMins = parseSingleTimeStr(parts[0], startAmPm);
+  if (startMins === null) return null;
+
+  let endMins;
+  if (parts[1]) {
+    endMins = parseSingleTimeStr(parts[1], endAmPm || startAmPm);
+    if (endMins !== null && endMins <= startMins) {
+      endMins += 24 * 60;
+    }
+  } else {
+    endMins = startMins + 120;
+  }
+
+  return { startMins, endMins };
+}
+
+function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = false) {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const todayStr = `${year}-${month}-${day}`;
 
-  if (examDateStr !== todayStr) return false;
+  if (examDateStr && examDateStr < todayStr) return 'COMPLETED';
+  if (examDateStr && examDateStr > todayStr) return 'UPCOMING';
 
-  const parts = sessionTimeStr.split('-').map(s => s.trim());
-  const parseTimeToMins = (timeStr) => {
-    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (!match) return null;
-    let hrs = parseInt(match[1], 10);
-    const mins = parseInt(match[2], 10);
-    const ampm = match[3].toUpperCase();
-    if (ampm === 'PM' && hrs < 12) hrs += 12;
-    if (ampm === 'AM' && hrs === 12) hrs = 0;
-    return hrs * 60 + mins;
-  };
-
-  const startMins = parseTimeToMins(parts[0]);
-  if (startMins === null) return false;
-
-  const endMins = parts[1] ? parseTimeToMins(parts[1]) : startMins + 120;
-  if (endMins === null) return false;
+  const window = parseSessionTimeWindow(sessionTimeStr);
+  if (!window) {
+    return isManuallyActive ? 'ACTIVE' : 'UPCOMING';
+  }
 
   const currentMins = now.getHours() * 60 + now.getMinutes();
-  return currentMins >= startMins && currentMins <= endMins;
+
+  if (currentMins >= window.startMins && currentMins <= window.endMins) {
+    return 'ACTIVE';
+  }
+  if (currentMins > window.endMins) {
+    return 'COMPLETED';
+  }
+  return 'UPCOMING';
+}
+
+function isCurrentTimeInSessionSlot(examDateStr, sessionTimeStr) {
+  return getBatchSessionStatus(examDateStr, sessionTimeStr) === 'ACTIVE';
 }
 
 function standardizeDate(rawDate) {
@@ -1484,4 +1533,4 @@ function doPost(e) {
 }
 
 export const appStorage = new AppStorage();
-export { standardizeDate };
+export { standardizeDate, getBatchSessionStatus, parseSessionTimeWindow };
