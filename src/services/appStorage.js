@@ -79,6 +79,15 @@ function sanitizeRow(table, row) {
     return clean;
   }
 
+  if (table === 'users') {
+    const allowed = ['id', 'username', 'password', 'name', 'role', 'email', 'room_number', 'created_at'];
+    const clean = {};
+    for (const key of allowed) {
+      if (row[key] !== undefined && row[key] !== null) clean[key] = row[key];
+    }
+    return clean;
+  }
+
   return row;
 }
 
@@ -329,7 +338,8 @@ class AppStorage {
   async syncFromCloud() {
     if (!isSupabaseConfigured || !supabase) return;
     try {
-      const [examsRes, roomsRes, studentsRes, logsRes] = await Promise.all([
+      const [usersRes, examsRes, roomsRes, studentsRes, logsRes] = await Promise.all([
+        supabase.from('users').select('*'),
         supabase.from('exams').select('*'),
         supabase.from('rooms').select('*'),
         supabase.from('students').select('*'),
@@ -338,40 +348,38 @@ class AppStorage {
 
       let updated = false;
 
-      if (examsRes.data && examsRes.data.length > 0) {
+      if (usersRes.data && Array.isArray(usersRes.data) && usersRes.data.length > 0) {
+        this.db.users = usersRes.data;
+        this.ensureAdminUsers();
+        updated = true;
+      }
+
+      if (examsRes.data && Array.isArray(examsRes.data) && examsRes.data.length > 0) {
         this.db.exams = examsRes.data.map(e => ({
           ...e,
           sets_json: typeof e.sets_json === 'string' ? e.sets_json : JSON.stringify(e.sets_json || ['Set A','Set B','Set C','Set D'])
         }));
         updated = true;
-      } else if (this.db.exams.length > 0) {
-        // Seed Supabase cloud with local exams if Supabase is fresh empty
-        this.pushToCloud('exams', this.db.exams);
       }
 
-      if (roomsRes.data && roomsRes.data.length > 0) {
+      if (roomsRes.data && Array.isArray(roomsRes.data) && roomsRes.data.length > 0) {
         this.db.rooms = roomsRes.data;
         updated = true;
-      } else if (this.db.rooms.length > 0) {
-        this.pushToCloud('rooms', this.db.rooms);
       }
 
-      if (studentsRes.data && studentsRes.data.length > 0) {
+      if (studentsRes.data && Array.isArray(studentsRes.data) && studentsRes.data.length > 0) {
         this.db.students = studentsRes.data;
         updated = true;
-      } else if (this.db.students.length > 0) {
-        this.pushToCloud('students', this.db.students);
       }
 
-      if (logsRes.data && logsRes.data.length > 0) {
+      if (logsRes.data && Array.isArray(logsRes.data) && logsRes.data.length > 0) {
         this.db.attendance_logs = logsRes.data;
         updated = true;
-      } else if (this.db.attendance_logs.length > 0) {
-        this.pushToCloud('attendance_logs', this.db.attendance_logs);
       }
 
       if (updated) {
         this.save();
+        this.evaluateBatchLifecycles();
       }
     } catch (err) {
       console.warn('Supabase cloud sync background notice:', err);
@@ -389,6 +397,15 @@ class AppStorage {
       }
     } catch (err) {
       console.warn(`Supabase push error on table ${table}:`, err);
+    }
+  }
+
+  async deleteFromCloud(table, id) {
+    if (!isSupabaseConfigured || !supabase || !id) return;
+    try {
+      await supabase.from(table).delete().eq('id', id);
+    } catch (err) {
+      console.warn(`Supabase delete error on table ${table}:`, err);
     }
   }
 
@@ -1208,6 +1225,7 @@ class AppStorage {
     if (!this.db.users) this.db.users = [];
     this.db.users.push(newUser);
     this.save();
+    this.pushToCloud('users', [newUser]);
     return { success: true, user: newUser, message: 'User created successfully' };
   }
 
@@ -1227,6 +1245,7 @@ class AppStorage {
     if (data.room_number !== undefined) user.room_number = String(data.room_number).trim();
 
     this.save();
+    this.pushToCloud('users', [user]);
     return { success: true, message: 'User updated successfully' };
   }
 
@@ -1243,6 +1262,7 @@ class AppStorage {
 
     this.db.users.splice(idx, 1);
     this.save();
+    this.deleteFromCloud('users', id);
     return { success: true, message: 'User deleted successfully' };
   }
 
