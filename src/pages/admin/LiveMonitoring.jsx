@@ -361,11 +361,17 @@ export default function LiveMonitoring({ onSwitchToRoom, onOpenGoogleSheetModal 
                     </div>
                   </div>
 
-                  <div className="w-full bg-slate-100 rounded-full h-2 mb-3.5 overflow-hidden">
+                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-3.5 p-0.5 border border-slate-200/50">
                     <div
-                      className="bg-slate-900 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${roomPercent}%` }}
-                    ></div>
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        roomPercent === 100
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                          : roomPercent > 0
+                          ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                          : 'bg-slate-300'
+                      }`}
+                      style={{ width: `${Math.max(roomPercent, 4)}%` }}
+                    />
                   </div>
 
                   <div className="flex items-center justify-between text-xs py-2 border-t border-slate-100 font-medium">

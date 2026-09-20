@@ -14,6 +14,13 @@ function getTimestampString() {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function generateId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'id-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+}
+
 /**
  * Standardize date to YYYY-MM-DD
  */
@@ -104,9 +111,6 @@ const SEED_ADMIN_USERS = [
   { id: 5, username: 'subramanian', password: 'CEO@tgl2026', name: 'Subramanian (CEO)', role: 'ADMIN', email: 'subramanian@tgl2026.edu' }
 ];
 
-/**
- * Generate fresh empty database (0 mock data)
- */
 function generateSeedData() {
   return {
     users: [...SEED_ADMIN_USERS],
@@ -135,6 +139,80 @@ class AppStorage {
         this.db = generateSeedData();
         this.save();
       }
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      this.syncFromCloud();
+      if (!this.syncInterval) {
+        this.syncInterval = setInterval(() => {
+          this.syncFromCloud();
+        }, 4000);
+      }
+    }
+  }
+
+  async syncFromCloud() {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      const [examsRes, roomsRes, studentsRes, logsRes] = await Promise.all([
+        supabase.from('exams').select('*'),
+        supabase.from('rooms').select('*'),
+        supabase.from('students').select('*'),
+        supabase.from('attendance_logs').select('*')
+      ]);
+
+      let updated = false;
+
+      if (examsRes.data && examsRes.data.length > 0) {
+        this.db.exams = examsRes.data.map(e => ({
+          ...e,
+          sets_json: typeof e.sets_json === 'string' ? e.sets_json : JSON.stringify(e.sets_json || ['Set A','Set B','Set C','Set D'])
+        }));
+        updated = true;
+      } else if (this.db.exams.length > 0) {
+        // Seed Supabase cloud with local exams if Supabase is fresh empty
+        this.pushToCloud('exams', this.db.exams);
+      }
+
+      if (roomsRes.data && roomsRes.data.length > 0) {
+        this.db.rooms = roomsRes.data;
+        updated = true;
+      } else if (this.db.rooms.length > 0) {
+        this.pushToCloud('rooms', this.db.rooms);
+      }
+
+      if (studentsRes.data && studentsRes.data.length > 0) {
+        this.db.students = studentsRes.data;
+        updated = true;
+      } else if (this.db.students.length > 0) {
+        this.pushToCloud('students', this.db.students);
+      }
+
+      if (logsRes.data && logsRes.data.length > 0) {
+        this.db.attendance_logs = logsRes.data;
+        updated = true;
+      } else if (this.db.attendance_logs.length > 0) {
+        this.pushToCloud('attendance_logs', this.db.attendance_logs);
+      }
+
+      if (updated) {
+        this.save();
+      }
+    } catch (err) {
+      console.warn('Supabase cloud sync background notice:', err);
+    }
+  }
+
+  async pushToCloud(table, rows) {
+    if (!isSupabaseConfigured || !supabase || !rows || rows.length === 0) return;
+    try {
+      const rowsToPush = Array.isArray(rows) ? rows : [rows];
+      const { error } = await supabase.from(table).upsert(rowsToPush);
+      if (error) {
+        console.warn(`Supabase upsert error on ${table}:`, error.message);
+      }
+    } catch (err) {
+      console.warn(`Supabase push error on table ${table}:`, err);
     }
   }
 
@@ -185,7 +263,7 @@ class AppStorage {
     const activeExam = this.getActiveExam();
     if (!activeExam) return { success: false, error: 'No active exam session' };
 
-    const room = this.db.rooms.find(r => r.exam_id === activeExam.id && r.room_number === String(roomNumber));
+    const room = this.db.rooms.find(r => String(r.exam_id) === String(activeExam.id) && String(r.room_number) === String(roomNumber));
     if (!room || String(room.room_pin) !== String(roomPin)) {
       return { success: false, error: `Invalid PIN for Room ${roomNumber}` };
     }
@@ -196,9 +274,10 @@ class AppStorage {
     } else if (staffName?.trim()) {
       room.faculty_name = staffName.trim();
       this.save();
+      this.pushToCloud('rooms', [room]);
     }
 
-    let faculty = this.db.users.find(u => u.id === room.faculty_id);
+    let faculty = this.db.users.find(u => String(u.id) === String(room.faculty_id));
     if (!faculty) {
       faculty = { id: 999, name: facultyName, username: `invigilator_${roomNumber}`, role: 'FACULTY', email: `room${roomNumber}@university.edu` };
     }
@@ -221,12 +300,12 @@ class AppStorage {
     const activeExam = this.getActiveExam();
     if (!activeExam) return [];
 
-    const examRooms = this.db.rooms.filter(r => r.exam_id === activeExam.id);
+    const examRooms = this.db.rooms.filter(r => String(r.exam_id) === String(activeExam.id));
     return examRooms.map(r => {
-      const f = this.db.users.find(u => u.id === r.faculty_id);
+      const f = this.db.users.find(u => String(u.id) === String(r.faculty_id));
       return {
         room_number: r.room_number,
-        faculty_name: f ? f.name : 'Unassigned',
+        faculty_name: f ? f.name : (r.faculty_name || 'Unassigned'),
         has_pin: true
       };
     }).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }));
@@ -245,10 +324,11 @@ class AppStorage {
     if (timeMatchingExam) {
       if (timeMatchingExam.status !== 'ACTIVE') {
         this.db.exams.forEach(e => {
-          if (e.id === timeMatchingExam.id) e.status = 'ACTIVE';
+          if (String(e.id) === String(timeMatchingExam.id)) e.status = 'ACTIVE';
           else if (e.status === 'ACTIVE') e.status = 'COMPLETED';
         });
         this.save();
+        this.pushToCloud('exams', this.db.exams);
       }
       return { ...timeMatchingExam, sets: JSON.parse(timeMatchingExam.sets_json || '["Set A","Set B","Set C","Set D"]') };
     }
@@ -269,10 +349,11 @@ class AppStorage {
 
   switchActiveExam(examId) {
     this.db.exams.forEach(e => {
-      if (e.id === Number(examId)) e.status = 'ACTIVE';
+      if (String(e.id) === String(examId)) e.status = 'ACTIVE';
       else if (e.status === 'ACTIVE') e.status = 'COMPLETED';
     });
     this.save();
+    this.pushToCloud('exams', this.db.exams);
     return { success: true, message: `Exam #${examId} is now ACTIVE` };
   }
 
@@ -282,7 +363,7 @@ class AppStorage {
 
     this.db.exams.forEach(e => { if (e.status === 'ACTIVE') e.status = 'COMPLETED'; });
 
-    const newId = this.db.exams.length > 0 ? Math.max(...this.db.exams.map(e => e.id)) + 1 : 1;
+    const newId = generateId();
     const newExam = {
       id: newId,
       name,
@@ -298,11 +379,12 @@ class AppStorage {
 
     this.db.exams.push(newExam);
     this.save();
+    this.pushToCloud('exams', [newExam]);
     return { success: true, exam_id: newId, message: 'Exam session created successfully' };
   }
 
   updateExam(id, data) {
-    const exam = this.db.exams.find(e => e.id === Number(id));
+    const exam = this.db.exams.find(e => String(e.id) === String(id));
     if (!exam) return { success: false, error: 'Exam not found' };
 
     if (data.name) exam.name = data.name;
@@ -315,26 +397,28 @@ class AppStorage {
     if (data.status) exam.status = data.status;
 
     this.save();
+    this.pushToCloud('exams', [exam]);
     return { success: true, message: 'Exam updated successfully' };
   }
 
   // Room & Attendance Operations
   getRoomAttendance(roomNumber, examId) {
     let exam;
-    if (examId) exam = this.db.exams.find(e => e.id === Number(examId));
+    if (examId) exam = this.db.exams.find(e => String(e.id) === String(examId));
     else exam = this.getActiveExam();
 
     if (!exam) return { error: 'No active exam found' };
 
-    let room = this.db.rooms.find(r => r.exam_id === exam.id && r.room_number === String(roomNumber));
+    let room = this.db.rooms.find(r => String(r.exam_id) === String(exam.id) && String(r.room_number) === String(roomNumber));
     if (!room) {
-      const newRoomId = this.db.rooms.length > 0 ? Math.max(...this.db.rooms.map(r => r.id)) + 1 : 1;
+      const newRoomId = generateId();
+      const pin = String(roomNumber).length <= 4 ? `${roomNumber}0` : String(roomNumber).slice(-4);
       room = {
         id: newRoomId,
         exam_id: exam.id,
         room_number: String(roomNumber),
         faculty_id: null,
-        room_pin: '1234',
+        room_pin: pin,
         current_set_index: 0,
         room_finalized: false,
         finalized_at: null,
@@ -342,10 +426,11 @@ class AppStorage {
       };
       this.db.rooms.push(room);
       this.save();
+      this.pushToCloud('rooms', [room]);
     }
 
     const sets = JSON.parse(exam.sets_json || '["Set A","Set B","Set C","Set D"]');
-    const students = this.db.students.filter(s => s.exam_id === exam.id && String(s.room_number) === String(roomNumber));
+    const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id) && String(s.room_number) === String(roomNumber));
 
     const total = students.length;
     const present = students.filter(s => s.status === 'PRESENT').length;
@@ -398,8 +483,8 @@ class AppStorage {
 
   markAttendance({ student_id, roll_number, room_number, exam_id, marked_by_user_id }) {
     let student;
-    if (student_id) student = this.db.students.find(s => s.id === Number(student_id));
-    else if (roll_number && exam_id) student = this.db.students.find(s => s.roll_number === roll_number && s.exam_id === Number(exam_id));
+    if (student_id) student = this.db.students.find(s => String(s.id) === String(student_id));
+    else if (roll_number && exam_id) student = this.db.students.find(s => s.roll_number === roll_number && String(s.exam_id) === String(exam_id));
 
     if (!student) return { error: 'Student not found' };
 
@@ -412,11 +497,12 @@ class AppStorage {
       };
     }
 
-    const exam = this.db.exams.find(e => e.id === student.exam_id);
-    let room = this.db.rooms.find(r => r.exam_id === student.exam_id && String(r.room_number) === String(student.room_number));
+    const exam = this.db.exams.find(e => String(e.id) === String(student.exam_id));
+    let room = this.db.rooms.find(r => String(r.exam_id) === String(student.exam_id) && String(r.room_number) === String(student.room_number));
     if (!room) {
-      const newRoomId = this.db.rooms.length > 0 ? Math.max(...this.db.rooms.map(r => r.id)) + 1 : 1;
-      room = { id: newRoomId, exam_id: student.exam_id, room_number: String(student.room_number), faculty_id: null, room_pin: '1234', current_set_index: 0, room_finalized: false, draft_counter: 0 };
+      const newRoomId = generateId();
+      const pin = String(student.room_number).length <= 4 ? `${student.room_number}0` : String(student.room_number).slice(-4);
+      room = { id: newRoomId, exam_id: student.exam_id, room_number: String(student.room_number), faculty_id: null, room_pin: pin, current_set_index: 0, room_finalized: false, draft_counter: 0 };
       this.db.rooms.push(room);
     }
 
@@ -443,28 +529,33 @@ class AppStorage {
 
     student.status = 'PRESENT';
     student.draft_status = 'DRAFT_PRESENT';
-    student.assigned_set = null; // Paper sets remain hidden / unassigned until headcount finalization!
+    student.assigned_set = null;
     student.checkin_time = checkinTime;
     student.is_late = isLateArrival;
     student.late_minutes = isLateArrival ? 'Gate Closed' : 0;
     student.draft_order = room.draft_counter;
     student.marked_by_user_id = marked_by_user_id || null;
 
-    const logId = this.db.attendance_logs.length > 0 ? Math.max(...this.db.attendance_logs.map(l => l.id)) + 1 : 1;
-    this.db.attendance_logs.push({
+    const logId = generateId();
+    const newLog = {
       id: logId,
       exam_id: student.exam_id,
       student_id: student.id,
       room_number: student.room_number,
       roll_number: student.roll_number,
+      student_name: student.name,
       action: isLateArrival ? 'MARK_LATE_PRESENT' : 'MARK_DRAFT_PRESENT',
       assigned_set: 'PENDING_FINALIZATION',
       timestamp: checkinTime,
       marked_by_user_id: marked_by_user_id || null,
       created_at: new Date().toISOString()
-    });
+    };
+    this.db.attendance_logs.push(newLog);
 
     this.save();
+    this.pushToCloud('students', [student]);
+    this.pushToCloud('rooms', [room]);
+    this.pushToCloud('attendance_logs', [newLog]);
 
     return {
       success: true,
@@ -476,7 +567,7 @@ class AppStorage {
   }
 
   toggleExamGate(examId) {
-    const exam = this.db.exams.find(e => e.id === Number(examId));
+    const exam = this.db.exams.find(e => String(e.id) === String(examId));
     if (!exam) return { success: false, error: 'Exam not found' };
 
     exam.gate_closed = !Boolean(exam.gate_closed);
@@ -486,21 +577,26 @@ class AppStorage {
       exam.gate_closed_at = null;
     }
 
-    const logId = this.db.attendance_logs.length > 0 ? Math.max(...this.db.attendance_logs.map(l => l.id)) + 1 : 1;
-    this.db.attendance_logs.push({
+    const logId = generateId();
+    const newLog = {
       id: logId,
       exam_id: exam.id,
       student_id: null,
       room_number: 'ALL',
       roll_number: 'N/A',
+      student_name: 'SYSTEM',
       action: exam.gate_closed ? 'CLOSE_GATE' : 'REOPEN_GATE',
       assigned_set: exam.gate_closed ? `Gate Closed at ${exam.gate_closed_at}` : 'Gate Re-opened',
       timestamp: getTimestampString(),
       marked_by_user_id: null,
       created_at: new Date().toISOString()
-    });
+    };
+    this.db.attendance_logs.push(newLog);
 
     this.save();
+    this.pushToCloud('exams', [exam]);
+    this.pushToCloud('attendance_logs', [newLog]);
+
     return {
       success: true,
       gate_closed: exam.gate_closed,
@@ -509,11 +605,11 @@ class AppStorage {
   }
 
   undoAttendance({ student_id, marked_by_user_id }) {
-    const student = this.db.students.find(s => s.id === Number(student_id));
+    const student = this.db.students.find(s => String(s.id) === String(student_id));
     if (!student) return { error: 'Student not found' };
     if (student.status !== 'PRESENT') return { error: 'Student is not marked as PRESENT' };
 
-    let room = this.db.rooms.find(r => r.exam_id === student.exam_id && String(r.room_number) === String(student.room_number));
+    let room = this.db.rooms.find(r => String(r.exam_id) === String(student.exam_id) && String(r.room_number) === String(student.room_number));
     if (room && room.room_finalized) {
       return { error: 'ROOM_FINALIZED', message: `Cannot undo attendance because Room ${student.room_number} is finalized and locked.` };
     }
@@ -529,21 +625,25 @@ class AppStorage {
     student.late_minutes = 0;
     student.draft_order = null;
 
-    const logId = this.db.attendance_logs.length > 0 ? Math.max(...this.db.attendance_logs.map(l => l.id)) + 1 : 1;
-    this.db.attendance_logs.push({
+    const logId = generateId();
+    const newLog = {
       id: logId,
       exam_id: student.exam_id,
       student_id: student.id,
       room_number: student.room_number,
       roll_number: student.roll_number,
+      student_name: student.name,
       action: 'UNDO_ABSENT',
       assigned_set: previousSet || 'N/A',
       timestamp: undoTime,
       marked_by_user_id: marked_by_user_id || null,
       created_at: new Date().toISOString()
-    });
+    };
+    this.db.attendance_logs.push(newLog);
 
     this.save();
+    this.pushToCloud('students', [student]);
+    this.pushToCloud('attendance_logs', [newLog]);
 
     return {
       success: true,
@@ -554,16 +654,16 @@ class AppStorage {
 
   finalizeRoomAttendance({ room_number, exam_id, marked_by_user_id }) {
     let exam;
-    if (exam_id) exam = this.db.exams.find(e => e.id === Number(exam_id));
+    if (exam_id) exam = this.db.exams.find(e => String(e.id) === String(exam_id));
     else exam = this.getActiveExam();
 
     if (!exam) return { success: false, error: 'No active exam found' };
 
-    let room = this.db.rooms.find(r => r.exam_id === exam.id && String(r.room_number) === String(room_number));
+    let room = this.db.rooms.find(r => String(r.exam_id) === String(exam.id) && String(r.room_number) === String(room_number));
     if (!room) return { success: false, error: `Room ${room_number} not found` };
 
     const sets = JSON.parse(exam.sets_json || '["Set A","Set B","Set C","Set D"]');
-    const roomStudents = this.db.students.filter(s => s.exam_id === exam.id && String(s.room_number) === String(room_number));
+    const roomStudents = this.db.students.filter(s => String(s.exam_id) === String(exam.id) && String(s.room_number) === String(room_number));
     const presentStudents = roomStudents
       .filter(s => s.status === 'PRESENT')
       .sort((a, b) => (a.draft_order || 0) - (b.draft_order || 0));
@@ -577,21 +677,26 @@ class AppStorage {
     room.room_finalized = true;
     room.finalized_at = getTimestampString();
 
-    const logId = this.db.attendance_logs.length > 0 ? Math.max(...this.db.attendance_logs.map(l => l.id)) + 1 : 1;
-    this.db.attendance_logs.push({
+    const logId = generateId();
+    const newLog = {
       id: logId,
       exam_id: exam.id,
       student_id: null,
       room_number: String(room_number),
       roll_number: 'N/A',
+      student_name: 'SYSTEM',
       action: 'FINALIZE_ROOM',
       assigned_set: `${presentStudents.length} Students Finalized`,
       timestamp: room.finalized_at,
       marked_by_user_id: marked_by_user_id || null,
       created_at: new Date().toISOString()
-    });
+    };
+    this.db.attendance_logs.push(newLog);
 
     this.save();
+    this.pushToCloud('students', presentStudents);
+    this.pushToCloud('rooms', [room]);
+    this.pushToCloud('attendance_logs', [newLog]);
 
     return {
       success: true,
@@ -602,44 +707,49 @@ class AppStorage {
 
   reopenRoomAttendance({ room_number, exam_id }) {
     let exam;
-    if (exam_id) exam = this.db.exams.find(e => e.id === Number(exam_id));
+    if (exam_id) exam = this.db.exams.find(e => String(e.id) === String(exam_id));
     else exam = this.getActiveExam();
 
     if (!exam) return { success: false, error: 'No active exam found' };
 
-    let room = this.db.rooms.find(r => r.exam_id === exam.id && String(r.room_number) === String(room_number));
+    let room = this.db.rooms.find(r => String(r.exam_id) === String(exam.id) && String(r.room_number) === String(room_number));
     if (!room) return { success: false, error: `Room ${room_number} not found` };
 
     room.room_finalized = false;
     room.finalized_at = null;
 
-    const logId = this.db.attendance_logs.length > 0 ? Math.max(...this.db.attendance_logs.map(l => l.id)) + 1 : 1;
-    this.db.attendance_logs.push({
+    const logId = generateId();
+    const newLog = {
       id: logId,
       exam_id: exam.id,
       student_id: null,
       room_number: String(room_number),
       roll_number: 'N/A',
+      student_name: 'SYSTEM',
       action: 'REOPEN_ROOM',
       assigned_set: 'Room Re-opened by Admin',
       timestamp: getTimestampString(),
       marked_by_user_id: null,
       created_at: new Date().toISOString()
-    });
+    };
+    this.db.attendance_logs.push(newLog);
 
     this.save();
+    this.pushToCloud('rooms', [room]);
+    this.pushToCloud('attendance_logs', [newLog]);
+
     return { success: true, message: `Room ${room_number} unlocked for attendance changes` };
   }
 
   getLatePresentees(examId) {
     let exam;
-    if (examId) exam = this.db.exams.find(e => e.id === Number(examId));
+    if (examId) exam = this.db.exams.find(e => String(e.id) === String(examId));
     else exam = this.getActiveExam();
 
     if (!exam) return [];
 
     return this.db.students
-      .filter(s => s.exam_id === exam.id && s.status === 'PRESENT' && s.is_late)
+      .filter(s => String(s.exam_id) === String(exam.id) && s.status === 'PRESENT' && s.is_late)
       .map(s => ({
         ...s,
         session_time: exam.session_time
@@ -650,14 +760,14 @@ class AppStorage {
     if (!query || query.trim().length < 2) return [];
 
     let exam;
-    if (examId) exam = this.db.exams.find(e => e.id === Number(examId));
+    if (examId) exam = this.db.exams.find(e => String(e.id) === String(examId));
     else exam = this.getActiveExam();
 
     if (!exam) return [];
 
     const q = query.trim().toLowerCase();
     return this.db.students.filter(s =>
-      s.exam_id === exam.id &&
+      String(s.exam_id) === String(exam.id) &&
       (s.roll_number.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
     ).slice(0, 10);
   }
@@ -667,17 +777,17 @@ class AppStorage {
 
     if (date) {
       filtered = filtered.filter(s => {
-        const e = this.db.exams.find(ex => ex.id === s.exam_id);
+        const e = this.db.exams.find(ex => String(ex.id) === String(s.exam_id));
         return e && e.exam_date === date;
       });
     }
 
     if (batchId && batchId !== 'ALL') {
-      filtered = filtered.filter(s => s.exam_id === Number(batchId));
+      filtered = filtered.filter(s => String(s.exam_id) === String(batchId));
     }
 
     const students = filtered.map(s => {
-      const e = this.db.exams.find(ex => ex.id === s.exam_id);
+      const e = this.db.exams.find(ex => String(ex.id) === String(s.exam_id));
       return {
         ...s,
         batch_name: s.batch_name || e?.name || '',
@@ -715,16 +825,16 @@ class AppStorage {
         };
       }
       datesMap[d].batch_count += 1;
-      datesMap[d].examIds.add(exam.id);
+      datesMap[d].examIds.add(String(exam.id));
     });
 
     Object.keys(datesMap).forEach(d => {
       const eIds = Array.from(datesMap[d].examIds);
 
-      const rooms = this.db.rooms.filter(r => eIds.includes(r.exam_id));
+      const rooms = this.db.rooms.filter(r => eIds.includes(String(r.exam_id)));
       datesMap[d].room_count = new Set(rooms.map(r => `${r.exam_id}_${r.room_number}`)).size;
 
-      const students = this.db.students.filter(s => eIds.includes(s.exam_id));
+      const students = this.db.students.filter(s => eIds.includes(String(s.exam_id)));
       datesMap[d].total_students = students.length;
       datesMap[d].present_count = students.filter(s => s.status === 'PRESENT').length;
       datesMap[d].absent_count = students.filter(s => s.status === 'ABSENT').length;
@@ -739,10 +849,10 @@ class AppStorage {
     const batchesWithRooms = exams.map(exam => {
       const sets = JSON.parse(exam.sets_json || '[]');
 
-      const examRooms = this.db.rooms.filter(r => r.exam_id === exam.id);
+      const examRooms = this.db.rooms.filter(r => String(r.exam_id) === String(exam.id));
       const rooms = examRooms.map(r => {
-        const u = this.db.users.find(usr => usr.id === r.faculty_id);
-        const roomStudents = this.db.students.filter(s => s.exam_id === exam.id && String(s.room_number) === String(r.room_number));
+        const u = this.db.users.find(usr => String(usr.id) === String(r.faculty_id));
+        const roomStudents = this.db.students.filter(s => String(s.exam_id) === String(exam.id) && String(s.room_number) === String(r.room_number));
         const total = roomStudents.length;
         const present = roomStudents.filter(s => s.status === 'PRESENT').length;
         const absent = total - present;
@@ -751,7 +861,7 @@ class AppStorage {
           room_id: r.id,
           room_number: r.room_number,
           room_pin: r.room_pin,
-          faculty_name: u ? u.name : 'Unassigned',
+          faculty_name: u ? u.name : (r.faculty_name || 'Unassigned'),
           faculty_email: u ? u.email : '',
           faculty_username: u ? u.username : '',
           total_students: total,
@@ -778,15 +888,15 @@ class AppStorage {
   }
 
   getLiveOverview(examId) {
-    const exam = this.db.exams.find(e => e.id === Number(examId));
+    const exam = this.db.exams.find(e => String(e.id) === String(examId));
     if (!exam) return { error: 'Exam not found' };
 
     const sets = JSON.parse(exam.sets_json || '[]');
-    const examRooms = this.db.rooms.filter(r => r.exam_id === exam.id);
+    const examRooms = this.db.rooms.filter(r => String(r.exam_id) === String(exam.id));
 
     const rooms = examRooms.map(r => {
-      const u = this.db.users.find(usr => usr.id === r.faculty_id);
-      const roomStudents = this.db.students.filter(s => s.exam_id === exam.id && String(s.room_number) === String(r.room_number));
+      const u = this.db.users.find(usr => String(usr.id) === String(r.faculty_id));
+      const roomStudents = this.db.students.filter(s => String(s.exam_id) === String(exam.id) && String(s.room_number) === String(r.room_number));
       const total = roomStudents.length;
       const present = roomStudents.filter(s => s.status === 'PRESENT').length;
       const lateCount = roomStudents.filter(s => s.status === 'PRESENT' && s.is_late).length;
@@ -794,7 +904,7 @@ class AppStorage {
       return {
         room_number: r.room_number,
         room_pin: r.room_pin,
-        faculty_name: u ? u.name : 'Unassigned',
+        faculty_name: u ? u.name : (r.faculty_name || 'Unassigned'),
         faculty_email: u ? u.email : '',
         total_students: total,
         present_count: present,
@@ -805,7 +915,7 @@ class AppStorage {
       };
     }).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }));
 
-    const students = this.db.students.filter(s => s.exam_id === exam.id);
+    const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id));
     const total = students.length;
     const present = students.filter(s => s.status === 'PRESENT').length;
     const lateStudents = students.filter(s => s.status === 'PRESENT' && s.is_late).map(s => ({
@@ -819,14 +929,14 @@ class AppStorage {
     });
 
     const recentLogs = this.db.attendance_logs
-      .filter(l => l.exam_id === exam.id)
-      .sort((a, b) => b.id - a.id)
+      .filter(l => String(l.exam_id) === String(exam.id))
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
       .slice(0, 10)
       .map(l => {
-        const s = this.db.students.find(st => st.id === l.student_id);
+        const s = this.db.students.find(st => String(st.id) === String(l.student_id));
         return {
           ...l,
-          student_name: s ? s.name : `Student #${l.student_id}`
+          student_name: s ? s.name : (l.student_name || `Student #${l.student_id}`)
         };
       });
 
@@ -856,16 +966,16 @@ class AppStorage {
   assignRoomFaculty(roomNumber, facultyId, roomPin, examId = null) {
     let targetExam;
     if (examId) {
-      targetExam = this.db.exams.find(e => e.id === Number(examId));
+      targetExam = this.db.exams.find(e => String(e.id) === String(examId));
     } else {
       targetExam = this.getActiveExam();
     }
     if (!targetExam) return { success: false, error: 'No active exam found' };
 
-    let room = this.db.rooms.find(r => r.exam_id === targetExam.id && String(r.room_number) === String(roomNumber));
+    let room = this.db.rooms.find(r => String(r.exam_id) === String(targetExam.id) && String(r.room_number) === String(roomNumber));
     if (!room) {
-      const newRoomId = this.db.rooms.length > 0 ? Math.max(...this.db.rooms.map(r => r.id)) + 1 : 1;
-      room = { id: newRoomId, exam_id: targetExam.id, room_number: String(roomNumber), faculty_id: facultyId ? Number(facultyId) : null, room_pin: roomPin || '1234', current_set_index: 0 };
+      const newRoomId = generateId();
+      room = { id: newRoomId, exam_id: targetExam.id, room_number: String(roomNumber), faculty_id: facultyId ? Number(facultyId) : null, room_pin: roomPin || `${roomNumber}0`, current_set_index: 0 };
       this.db.rooms.push(room);
     } else {
       room.faculty_id = facultyId ? Number(facultyId) : null;
@@ -873,11 +983,12 @@ class AppStorage {
     }
 
     if (facultyId) {
-      const f = this.db.users.find(u => u.id === Number(facultyId));
+      const f = this.db.users.find(u => String(u.id) === String(facultyId));
       if (f) f.room_number = roomNumber;
     }
 
     this.save();
+    this.pushToCloud('rooms', [room]);
     return { success: true, message: `Room ${roomNumber} assigned successfully` };
   }
 
@@ -906,9 +1017,12 @@ class AppStorage {
     }
 
     const provisionedRooms = new Set();
+    const createdExams = [];
+    const createdRooms = [];
+    const createdStudents = [];
 
     if (Object.keys(groupedBatches).length === 0 && fallbackExamId) {
-      const fallbackExam = this.db.exams.find(e => e.id === Number(fallbackExamId));
+      const fallbackExam = this.db.exams.find(e => String(e.id) === String(fallbackExamId));
       const fBatch = fallbackExam?.name || 'Default Batch';
       const fTime = fallbackExam?.session_time || '08:00 AM - 10:00 AM';
       const fDate = fallbackExam?.exam_date || new Date().toISOString().split('T')[0];
@@ -918,20 +1032,21 @@ class AppStorage {
         const roomNo = String(r.room_number);
         const rollNo = String(r.roll_number);
 
-        let room = this.db.rooms.find(rm => rm.exam_id === Number(fallbackExamId) && rm.room_number === roomNo);
+        let room = this.db.rooms.find(rm => String(rm.exam_id) === String(fallbackExamId) && rm.room_number === roomNo);
         if (!room) {
           const pin = roomNo.length <= 4 ? `${roomNo}0` : roomNo.slice(-4);
-          const newRoomId = this.db.rooms.length > 0 ? Math.max(...this.db.rooms.map(rm => rm.id)) + 1 : 1;
-          room = { id: newRoomId, exam_id: Number(fallbackExamId), room_number: roomNo, faculty_id: null, room_pin: pin, current_set_index: 0 };
+          const newRoomId = generateId();
+          room = { id: newRoomId, exam_id: fallbackExamId, room_number: roomNo, faculty_id: null, room_pin: pin, current_set_index: 0 };
           this.db.rooms.push(room);
+          createdRooms.push(room);
         }
 
-        let student = this.db.students.find(s => s.exam_id === Number(fallbackExamId) && s.roll_number === rollNo);
+        let student = this.db.students.find(s => String(s.exam_id) === String(fallbackExamId) && s.roll_number === rollNo);
         if (!student) {
-          const newStudentId = this.db.students.length > 0 ? Math.max(...this.db.students.map(s => s.id)) + 1 : 1;
-          this.db.students.push({
+          const newStudentId = generateId();
+          student = {
             id: newStudentId,
-            exam_id: Number(fallbackExamId),
+            exam_id: fallbackExamId,
             room_number: roomNo,
             roll_number: rollNo,
             name: r.name || `Student ${rollNo}`,
@@ -944,12 +1059,15 @@ class AppStorage {
             assigned_set: null,
             checkin_time: null,
             synced_to_sheet: 0
-          });
+          };
+          this.db.students.push(student);
+          createdStudents.push(student);
         } else {
           student.room_number = roomNo;
           student.name = r.name || student.name;
           student.email = r.email || student.email;
           student.department = r.department || student.department;
+          createdStudents.push(student);
         }
 
         provisionedRooms.add(roomNo);
@@ -966,8 +1084,9 @@ class AppStorage {
         if (exam) {
           examId = exam.id;
           exam.session_time = g.assessment_time;
+          createdExams.push(exam);
         } else {
-          const newExamId = this.db.exams.length > 0 ? Math.max(...this.db.exams.map(e => e.id)) + 1 : 1;
+          const newExamId = generateId();
           const subjectCode = g.batch.length <= 8 ? g.batch.toUpperCase() : g.batch.slice(0, 6).toUpperCase();
           exam = {
             id: newExamId,
@@ -982,6 +1101,7 @@ class AppStorage {
             created_at: new Date().toISOString()
           };
           this.db.exams.push(exam);
+          createdExams.push(exam);
           examId = newExamId;
         }
 
@@ -989,18 +1109,19 @@ class AppStorage {
           const roomNo = String(s.room_number);
           const rollNo = String(s.roll_number);
 
-          let room = this.db.rooms.find(rm => rm.exam_id === examId && rm.room_number === roomNo);
+          let room = this.db.rooms.find(rm => String(rm.exam_id) === String(examId) && rm.room_number === roomNo);
           if (!room) {
             const pin = roomNo.length <= 4 ? `${roomNo}0` : roomNo.slice(-4);
-            const newRoomId = this.db.rooms.length > 0 ? Math.max(...this.db.rooms.map(rm => rm.id)) + 1 : 1;
+            const newRoomId = generateId();
             room = { id: newRoomId, exam_id: examId, room_number: roomNo, faculty_id: null, room_pin: pin, current_set_index: 0 };
             this.db.rooms.push(room);
+            createdRooms.push(room);
           }
 
-          let student = this.db.students.find(st => st.exam_id === examId && st.roll_number === rollNo);
+          let student = this.db.students.find(st => String(st.exam_id) === String(examId) && st.roll_number === rollNo);
           if (!student) {
-            const newStudentId = this.db.students.length > 0 ? Math.max(...this.db.students.map(st => st.id)) + 1 : 1;
-            this.db.students.push({
+            const newStudentId = generateId();
+            student = {
               id: newStudentId,
               exam_id: examId,
               room_number: roomNo,
@@ -1015,12 +1136,15 @@ class AppStorage {
               assigned_set: null,
               checkin_time: null,
               synced_to_sheet: 0
-            });
+            };
+            this.db.students.push(student);
+            createdStudents.push(student);
           } else {
             student.room_number = roomNo;
             student.name = s.name || student.name;
             student.email = s.email || student.email;
             student.department = s.department || student.department;
+            createdStudents.push(student);
           }
 
           provisionedRooms.add(`Room ${roomNo} [${g.batch}]`);
@@ -1030,6 +1154,10 @@ class AppStorage {
     }
 
     this.save();
+    this.pushToCloud('exams', createdExams);
+    this.pushToCloud('rooms', createdRooms);
+    this.pushToCloud('students', createdStudents);
+
     return {
       added: totalAdded,
       dates: Array.from(uniqueDates),
@@ -1045,14 +1173,13 @@ class AppStorage {
 
     const wb = xlsx.utils.book_new();
 
-    // Summary Sheet
     const summaryRows = [];
     let dayTotal = 0, dayPresent = 0, dayAbsent = 0;
 
     exams.forEach(exam => {
       const sets = JSON.parse(exam.sets_json || '["Set A","Set B","Set C","Set D"]');
-      const roomsCount = new Set(this.db.rooms.filter(r => r.exam_id === exam.id).map(r => r.room_number)).size;
-      const students = this.db.students.filter(s => s.exam_id === exam.id);
+      const roomsCount = new Set(this.db.rooms.filter(r => String(r.exam_id) === String(exam.id)).map(r => r.room_number)).size;
+      const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id));
       const total = students.length;
       const present = students.filter(s => s.status === 'PRESENT').length;
       const absent = total - present;
@@ -1092,9 +1219,8 @@ class AppStorage {
     const wsSummary = xlsx.utils.json_to_sheet(summaryRows);
     xlsx.utils.book_append_sheet(wb, wsSummary, 'Executive_Summary');
 
-    // Individual Batch Sheets
     exams.forEach((exam, idx) => {
-      const students = this.db.students.filter(s => s.exam_id === exam.id).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }) || a.roll_number.localeCompare(b.roll_number));
+      const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id)).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }) || a.roll_number.localeCompare(b.roll_number));
       const sheetData = students.map(s => ({
         'Reg Number': s.roll_number,
         'Student Name': s.name,
@@ -1149,13 +1275,13 @@ class AppStorage {
     return { success: true };
   }
 
-  // Google Sheet Sync Webhook (Client Side Direct Fetch)
+  // Google Sheet Sync Webhook
   async triggerSheetSync(studentId) {
     try {
-      const student = this.db.students.find(s => s.id === Number(studentId));
+      const student = this.db.students.find(s => String(s.id) === String(studentId));
       if (!student) return;
 
-      const exam = this.db.exams.find(e => e.id === student.exam_id);
+      const exam = this.db.exams.find(e => String(e.id) === String(student.exam_id));
       if (!exam || !exam.google_sheet_webhook_url) return;
 
       const payload = {
@@ -1183,6 +1309,7 @@ class AppStorage {
       if (res.ok) {
         student.synced_to_sheet = 1;
         this.save();
+        this.pushToCloud('students', [student]);
       }
     } catch (e) {
       console.warn('Google Sheet background sync warning:', e.message);
@@ -1190,12 +1317,12 @@ class AppStorage {
   }
 
   async syncAllToGoogleSheet(examId) {
-    const exam = this.db.exams.find(e => e.id === Number(examId));
+    const exam = this.db.exams.find(e => String(e.id) === String(examId));
     if (!exam || !exam.google_sheet_webhook_url) {
       return { success: false, reason: 'No Webhook URL configured. Please paste your Google Apps Script Web App URL first.' };
     }
 
-    const students = this.db.students.filter(s => s.exam_id === Number(examId));
+    const students = this.db.students.filter(s => String(s.exam_id) === String(examId));
     const payload = {
       action: 'SYNC_ALL',
       exam_name: exam.name,
@@ -1224,6 +1351,7 @@ class AppStorage {
       if (res.ok) {
         students.forEach(s => s.synced_to_sheet = 1);
         this.save();
+        this.pushToCloud('students', students);
         return { success: true, count: students.length };
       } else {
         return { success: false, status: res.status };

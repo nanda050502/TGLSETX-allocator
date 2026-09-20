@@ -524,7 +524,7 @@ export default function AttendanceCalendar({ onOpenRoomCheckin, onExamActivated 
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {(activeBatch.rooms || []).map((room) => {
                           const roomPercent =
                             room.total_students > 0
@@ -537,44 +537,61 @@ export default function AttendanceCalendar({ onOpenRoomCheckin, onExamActivated 
                               tabIndex={0}
                               role="button"
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenRoomModal(activeBatch, room); }}
-                              className="bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl p-4.5 cursor-pointer transition shadow-subtle hover:border-slate-300 group focus-ring"
+                              className="bg-white hover:bg-slate-50/90 border border-slate-200/90 hover:border-emerald-300 rounded-2xl p-5 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md group focus-ring relative overflow-hidden flex flex-col justify-between"
                             >
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <h4 className="font-bold text-base text-slate-900 group-hover:text-slate-950 transition">
-                                    Room {room.room_number}
-                                  </h4>
-                                  <p className="text-xs text-slate-500 truncate max-w-[150px] mt-0.5 font-medium">
-                                    Invigilator: {room.faculty_name || 'Assigned PIN'}
-                                  </p>
+                              <div>
+                                <div className="flex items-start justify-between gap-2 mb-3">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-extrabold text-base text-slate-900 group-hover:text-emerald-950 transition">
+                                        Room {room.room_number}
+                                      </h4>
+                                      {room.room_pin && (
+                                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                          PIN: {room.room_pin}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-slate-500 truncate max-w-[170px] mt-1 font-medium">
+                                      Invigilator: <span className="text-slate-800 font-semibold">{room.faculty_name || 'Unassigned'}</span>
+                                    </p>
+                                  </div>
+
+                                  <span
+                                    className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border tabular-nums ${
+                                      roomPercent === 100
+                                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                        : roomPercent > 0
+                                        ? 'bg-slate-100 text-slate-800 border-slate-200'
+                                        : 'bg-slate-50 text-slate-400 border-slate-200'
+                                    }`}
+                                  >
+                                    {roomPercent}%
+                                  </span>
                                 </div>
 
-                                <span
-                                  className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md border tabular-nums ${
-                                    roomPercent === 100
-                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                      : roomPercent > 0
-                                      ? 'bg-slate-100 text-slate-900 border-slate-200'
-                                      : 'bg-white text-slate-400 border-slate-200'
-                                  }`}
-                                >
-                                  {roomPercent}%
-                                </span>
+                                {/* Sleek Gradient Progress Bar */}
+                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-3.5 p-0.5 border border-slate-200/50">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      roomPercent === 100
+                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                                        : roomPercent > 0
+                                        ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                                        : 'bg-slate-300'
+                                    }`}
+                                    style={{ width: `${Math.max(roomPercent, 4)}%` }}
+                                  />
+                                </div>
                               </div>
 
-                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-3">
-                                <div
-                                  className="bg-slate-900 h-full rounded-full transition-all duration-300"
-                                  style={{ width: `${roomPercent}%` }}
-                                />
-                              </div>
-
-                              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 font-medium">
+                              <div className="flex items-center justify-between text-xs pt-2.5 border-t border-slate-100 font-medium">
                                 <span className="text-slate-600">
-                                  <b className="text-emerald-700 font-mono tabular-nums">{room.present_count}</b> / {room.total_students} Present
+                                  <b className="text-emerald-700 font-mono text-xs tabular-nums">{room.present_count}</b> / {room.total_students} Present
                                 </span>
-                                <span className="text-slate-800 font-bold text-xs flex items-center gap-0.5 group-hover:translate-x-0.5 transition">
-                                  Roster <ChevronRight size={14} />
+                                <span className="text-slate-900 font-bold text-xs flex items-center gap-1 group-hover:text-emerald-700 group-hover:translate-x-0.5 transition">
+                                  <span>Roster</span>
+                                  <ChevronRight size={14} />
                                 </span>
                               </div>
                             </div>
