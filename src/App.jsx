@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { appStorage } from './services/appStorage';
 import Login from './pages/Login';
@@ -69,7 +70,7 @@ function MainApp() {
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-start font-sans antialiased sm:py-6 sm:px-4">
         {/* Android Device Container Shell (Full screen on mobile, phone frame on desktop) */}
         <div className="w-full max-w-md min-h-screen sm:min-h-[850px] sm:max-h-[920px] bg-slate-900 text-slate-100 sm:rounded-[40px] shadow-2xl border border-slate-800 flex flex-col overflow-hidden relative">
-          
+
           {/* Simulated Android System Status Bar */}
           <div className="bg-slate-950 px-5 pt-3 pb-1.5 flex items-center justify-between text-[11px] font-mono text-slate-400 select-none border-b border-slate-800/80">
             <span className="font-bold text-slate-200">09:41 AM</span>
@@ -208,6 +209,7 @@ export default function App() {
     <AuthProvider>
       <MainApp />
       <Analytics />
+      <SpeedInsights />
     </AuthProvider>
   );
 }

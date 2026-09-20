@@ -853,14 +853,19 @@ class AppStorage {
     return this.db.users.filter(u => u.role === 'FACULTY');
   }
 
-  assignRoomFaculty(roomNumber, facultyId, roomPin) {
-    const activeExam = this.getActiveExam();
-    if (!activeExam) return { success: false, error: 'No active exam found' };
+  assignRoomFaculty(roomNumber, facultyId, roomPin, examId = null) {
+    let targetExam;
+    if (examId) {
+      targetExam = this.db.exams.find(e => e.id === Number(examId));
+    } else {
+      targetExam = this.getActiveExam();
+    }
+    if (!targetExam) return { success: false, error: 'No active exam found' };
 
-    let room = this.db.rooms.find(r => r.exam_id === activeExam.id && String(r.room_number) === String(roomNumber));
+    let room = this.db.rooms.find(r => r.exam_id === targetExam.id && String(r.room_number) === String(roomNumber));
     if (!room) {
       const newRoomId = this.db.rooms.length > 0 ? Math.max(...this.db.rooms.map(r => r.id)) + 1 : 1;
-      room = { id: newRoomId, exam_id: activeExam.id, room_number: String(roomNumber), faculty_id: facultyId, room_pin: roomPin || '1234', current_set_index: 0 };
+      room = { id: newRoomId, exam_id: targetExam.id, room_number: String(roomNumber), faculty_id: facultyId ? Number(facultyId) : null, room_pin: roomPin || '1234', current_set_index: 0 };
       this.db.rooms.push(room);
     } else {
       room.faculty_id = facultyId ? Number(facultyId) : null;
