@@ -495,34 +495,13 @@ class AppStorage {
 
     let statusChanged = false;
 
-    // 1. Evaluate candidate status for each batch
-    const evaluatedExams = this.db.exams.map(exam => {
-      const calcStatus = getBatchSessionStatus(
+    // Evaluate target status for each batch based on start and end time window
+    this.db.exams.forEach(exam => {
+      const targetStatus = getBatchSessionStatus(
         exam.exam_date,
         exam.session_time,
         exam.status === 'MANUAL_ACTIVE'
       );
-      return { ...exam, calcStatus };
-    });
-
-    // 2. Identify candidate ACTIVE batch
-    const activeCandidates = evaluatedExams.filter(e => e.calcStatus === 'ACTIVE');
-    const activeExamId = activeCandidates.length > 0 ? activeCandidates[0].id : null;
-
-    // 3. Update exam status strictly enforcing single-active invariant
-    this.db.exams.forEach(exam => {
-      let targetStatus;
-      if (activeExamId) {
-        if (String(exam.id) === String(activeExamId)) {
-          targetStatus = 'ACTIVE';
-        } else {
-          const calc = getBatchSessionStatus(exam.exam_date, exam.session_time);
-          targetStatus = calc === 'ACTIVE' ? 'COMPLETED' : calc;
-        }
-      } else {
-        // No batch currently in active time slot (e.g. gap between batches)
-        targetStatus = getBatchSessionStatus(exam.exam_date, exam.session_time);
-      }
 
       if (exam.status !== targetStatus) {
         exam.status = targetStatus;
@@ -530,23 +509,6 @@ class AppStorage {
       }
     });
 
-    // 4. Guarantee strict SINGLE-ACTIVE enforcement (safety check)
-    const activeCount = this.db.exams.filter(e => e.status === 'ACTIVE').length;
-    if (activeCount > 1) {
-      let keptOne = false;
-      this.db.exams.forEach(e => {
-        if (e.status === 'ACTIVE') {
-          if (!keptOne) {
-            keptOne = true;
-          } else {
-            e.status = 'COMPLETED';
-            statusChanged = true;
-          }
-        }
-      });
-    }
-
-    // 5. Save changes, sync to Supabase, and trigger custom event if status transitioned
     if (statusChanged) {
       this.save();
       this.pushToCloud('exams', this.db.exams);
