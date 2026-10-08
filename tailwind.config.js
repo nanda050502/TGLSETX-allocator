@@ -16,16 +16,16 @@ export default {
     extend: {
       colors: {
         slate: {
-          50: '#f8fafc',
+          50: '#F5F7FF',  // Updated Background
           100: '#f1f5f9',
-          200: '#e2e8f0',
+          200: '#E5E7EB', // Updated Border
           300: '#cbd5e1',
           400: '#94a3b8',
-          500: '#64748b',
+          500: '#6B7280', // Updated Muted
           600: '#475569',
-          700: '#334155',
+          700: '#374151', // Updated Body
           800: '#1e293b',
-          900: '#0f172b',
+          900: '#111827', // Updated Heading
           950: '#020617',
         },
         brand: {
@@ -38,14 +38,14 @@ export default {
         accent: {
           50: '#eeF2ff',
           100: '#e0e7ff',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
+          500: '#F97316', // Updated Accent
+          600: '#4F46E5', // Updated Primary
+          700: '#7C3AED', // Updated Secondary
         },
         emerald: {
           50: '#ecfdf5',
           100: '#d1fae5',
-          500: '#10b981',
+          500: '#10B981', // Updated Success
           600: '#059669',
           700: '#047857',
         },
@@ -59,10 +59,11 @@ export default {
         rose: {
           50: '#fff1f2',
           100: '#ffe4e6',
-          500: '#f43f5e',
+          500: '#EF4444', // Updated Error
           600: '#e11d48',
           700: '#be123c',
-        }
+        },
+        surface: '#FFFFFF' // Added Surface
       },
       borderRadius: {
         'xs': '0.125rem',

@@ -65,7 +65,7 @@ export default function DataIngestion({ onIngestionSuccess }) {
           const bstr = evt.target.result;
           const workbook = xlsx.read(bstr, { type: 'binary' });
           const sheetName = workbook.SheetNames[0];
-          const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+          const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
 
           const normalizedRows = rawData.map(normalizeMasterRow);
           const res = appStorage.ingestMasterRows(normalizedRows);
@@ -120,7 +120,7 @@ export default function DataIngestion({ onIngestionSuccess }) {
       const csvText = await response.text();
       const workbook = xlsx.read(csvText, { type: 'string' });
       const sheetName = workbook.SheetNames[0];
-      const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false });
 
       const normalizedRows = rawData.map(normalizeMasterRow);
       const res = appStorage.ingestMasterRows(normalizedRows);
