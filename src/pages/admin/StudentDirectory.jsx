@@ -57,7 +57,12 @@ export default function StudentDirectory() {
   const sets = ['Set A', 'Set B', 'Set C', 'Set D'];
   const uniqueBatchNames = Array.from(new Set(students.map(s => s.batch_name))).filter(Boolean);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const filteredStudents = students.filter(s => {
+    // Only show today's roster
+    if (s.exam_date !== todayStr) return false;
+
     const matchesSearch =
       s.roll_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -76,6 +81,10 @@ export default function StudentDirectory() {
 
     return matchesSearch && matchesBatch && matchesRoom && matchesStatus && matchesSet;
   });
+
+  const nextAllocationDate = batches
+    .filter(b => b.exam_date && b.exam_date > todayStr)
+    .sort((a, b) => a.exam_date.localeCompare(b.exam_date))[0]?.exam_date;
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans min-w-0 max-w-full">
@@ -176,7 +185,12 @@ export default function StudentDirectory() {
         ) : filteredStudents.length === 0 ? (
           <div className="py-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 p-6">
             <Users size={28} className="mx-auto mb-2 text-slate-300" />
-            <span className="text-xs font-semibold text-slate-700">No students match the selected filter</span>
+            <span className="text-xs font-semibold text-slate-700">
+              {students.filter(s => s.exam_date === todayStr).length === 0 ?
+                `Nothing is allocated for today. ${nextAllocationDate ? `Next allocation is on ${nextAllocationDate}.` : ''}` :
+                'No students match the selected filter'
+              }
+            </span>
           </div>
         ) : (
           filteredStudents.map((s) => {
@@ -265,7 +279,12 @@ export default function StudentDirectory() {
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
                     <Users size={28} className="mx-auto mb-1 text-slate-300" />
-                    <span>No students match the selected filter</span>
+                    <span>
+                      {students.filter(s => s.exam_date === todayStr).length === 0 ?
+                        `Nothing is allocated for today. ${nextAllocationDate ? `Next allocation is on ${nextAllocationDate}.` : ''}` :
+                        'No students match the selected filter'
+                      }
+                    </span>
                   </td>
                 </tr>
               ) : (
