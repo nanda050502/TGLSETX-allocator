@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { appStorage } from '../services/appStorage';
-import { ShieldCheck, KeyRound, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
+import { ShieldCheck, KeyRound, ArrowRight, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const { loginAdminOrFaculty, loginWithRoomPin } = useAuth();
