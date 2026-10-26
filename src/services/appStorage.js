@@ -1043,9 +1043,11 @@ class AppStorage {
 
   getCalendarSummary() {
     const datesMap = {};
+    const examToDate = new Map();
 
     this.db.exams.forEach(exam => {
       const d = exam.exam_date;
+      examToDate.set(String(exam.id), d);
       if (!datesMap[d]) {
         datesMap[d] = {
           exam_date: d,
@@ -1061,16 +1063,28 @@ class AppStorage {
       datesMap[d].examIds.add(String(exam.id));
     });
 
-    Object.keys(datesMap).forEach(d => {
-      const eIds = Array.from(datesMap[d].examIds);
+    const dateRooms = new Map();
+    this.db.rooms.forEach(r => {
+      const eIdStr = String(r.exam_id);
+      const d = examToDate.get(eIdStr);
+      if (d) {
+        if (!dateRooms.has(d)) dateRooms.set(d, new Set());
+        dateRooms.get(d).add(`${eIdStr}_${r.room_number}`);
+      }
+    });
 
-      const rooms = this.db.rooms.filter(r => eIds.includes(String(r.exam_id)));
-      datesMap[d].room_count = new Set(rooms.map(r => `${r.exam_id}_${r.room_number}`)).size;
+    for (const [d, roomsSet] of dateRooms.entries()) {
+      if (datesMap[d]) datesMap[d].room_count = roomsSet.size;
+    }
 
-      const students = this.db.students.filter(s => eIds.includes(String(s.exam_id)));
-      datesMap[d].total_students = students.length;
-      datesMap[d].present_count = students.filter(s => s.status === 'PRESENT').length;
-      datesMap[d].absent_count = students.filter(s => s.status === 'ABSENT').length;
+    this.db.students.forEach(s => {
+      const eIdStr = String(s.exam_id);
+      const d = examToDate.get(eIdStr);
+      if (d && datesMap[d]) {
+        datesMap[d].total_students++;
+        if (s.status === 'PRESENT') datesMap[d].present_count++;
+        if (s.status === 'ABSENT') datesMap[d].absent_count++;
+      }
     });
 
     return Object.values(datesMap).sort((a, b) => new Date(b.exam_date) - new Date(a.exam_date));
