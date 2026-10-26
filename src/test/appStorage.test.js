@@ -1,7 +1,74 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getBatchSessionStatus, parseSessionTimeWindow, standardizeDate, appStorage } from '../services/appStorage';
+import { getBatchSessionStatus, parseSessionTimeWindow, standardizeDate, appStorage, generateId } from '../services/appStorage';
 
 describe('appStorage utilities', () => {
+  describe('generateId', () => {
+    let originalCrypto;
+
+    beforeEach(() => {
+      originalCrypto = global.crypto;
+    });
+
+    afterEach(() => {
+      Object.defineProperty(global, 'crypto', {
+        value: originalCrypto,
+        configurable: true,
+      });
+    });
+
+    it('uses crypto.randomUUID when available', () => {
+      const mockUUID = '123e4567-e89b-12d3-a456-426614174000';
+      Object.defineProperty(global, 'crypto', {
+        value: {
+          randomUUID: vi.fn().mockReturnValue(mockUUID),
+        },
+        configurable: true,
+      });
+
+      const result = generateId();
+
+      expect(global.crypto.randomUUID).toHaveBeenCalled();
+      expect(result).toBe(mockUUID);
+    });
+
+    it('falls back to Math.random implementation when crypto is undefined', () => {
+      Object.defineProperty(global, 'crypto', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const result = generateId();
+
+      // Basic UUID format validation regex
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(result).toMatch(uuidRegex);
+    });
+
+    it('falls back to Math.random implementation when crypto.randomUUID is undefined', () => {
+      Object.defineProperty(global, 'crypto', {
+        value: {}, // crypto exists, but no randomUUID
+        configurable: true,
+      });
+
+      const result = generateId();
+
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(result).toMatch(uuidRegex);
+    });
+
+    it('generates unique ids using fallback', () => {
+      Object.defineProperty(global, 'crypto', {
+        value: undefined,
+        configurable: true,
+      });
+
+      const id1 = generateId();
+      const id2 = generateId();
+
+      expect(id1).not.toBe(id2);
+    });
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });
