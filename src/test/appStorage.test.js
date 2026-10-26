@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getBatchSessionStatus, parseSessionTimeWindow, standardizeDate, appStorage } from '../services/appStorage';
+import { getBatchSessionStatus, parseSessionTimeWindow, standardizeDate, appStorage, sanitizeRow } from '../services/appStorage';
 
 describe('appStorage utilities', () => {
   beforeEach(() => {
@@ -65,6 +65,122 @@ describe('appStorage utilities', () => {
 
     it('standardizes DD/MM/YYYY if first is > 12', () => {
       expect(standardizeDate('15/01/2023')).toBe('2023-01-15');
+    });
+  });
+
+  describe('sanitizeRow', () => {
+    it('returns the input unchanged if it is not an object', () => {
+      expect(sanitizeRow('students', null)).toBeNull();
+      expect(sanitizeRow('students', undefined)).toBeUndefined();
+      expect(sanitizeRow('students', 'string')).toBe('string');
+      expect(sanitizeRow('students', 123)).toBe(123);
+    });
+
+    it('returns the row unchanged for unknown tables', () => {
+      const row = { id: 1, unknown_col: 'test' };
+      expect(sanitizeRow('unknown_table', row)).toEqual(row);
+    });
+
+    it('sanitizes students table row correctly', () => {
+      const row = {
+        id: 1,
+        exam_id: 'exam1',
+        name: 'John Doe',
+        invalid_col: 'should be removed',
+        status: null, // Should not be included
+        department: undefined, // Should not be included
+        roll_number: '123'
+      };
+      const result = sanitizeRow('students', row);
+      expect(result).toEqual({
+        id: 1,
+        exam_id: 'exam1',
+        name: 'John Doe',
+        roll_number: '123'
+      });
+      expect(result.invalid_col).toBeUndefined();
+      expect(result.status).toBeUndefined();
+      expect(result.department).toBeUndefined();
+    });
+
+    it('sanitizes rooms table row correctly', () => {
+      const row = {
+        id: 2,
+        room_number: '101',
+        faculty_name: 'Prof. Smith',
+        invalid_col: 'test',
+        room_pin: '1234',
+        finalized_at: null
+      };
+      const result = sanitizeRow('rooms', row);
+      expect(result).toEqual({
+        id: 2,
+        room_number: '101',
+        faculty_name: 'Prof. Smith',
+        room_pin: '1234'
+      });
+      expect(result.invalid_col).toBeUndefined();
+      expect(result.finalized_at).toBeUndefined();
+    });
+
+    it('sanitizes exams table row correctly', () => {
+      const row = {
+        id: 3,
+        name: 'Midterm',
+        exam_date: '2023-10-10',
+        invalid_col: 'test',
+        gate_closed: true,
+        sets_json: undefined
+      };
+      const result = sanitizeRow('exams', row);
+      expect(result).toEqual({
+        id: 3,
+        name: 'Midterm',
+        exam_date: '2023-10-10',
+        gate_closed: true
+      });
+      expect(result.invalid_col).toBeUndefined();
+      expect(result.sets_json).toBeUndefined();
+    });
+
+    it('sanitizes attendance_logs table row correctly', () => {
+      const row = {
+        id: 4,
+        exam_id: 'exam1',
+        student_id: 'std1',
+        invalid_col: 'test',
+        action: 'MARK_PRESENT',
+        assigned_set: null
+      };
+      const result = sanitizeRow('attendance_logs', row);
+      expect(result).toEqual({
+        id: 4,
+        exam_id: 'exam1',
+        student_id: 'std1',
+        action: 'MARK_PRESENT'
+      });
+      expect(result.invalid_col).toBeUndefined();
+      expect(result.assigned_set).toBeUndefined();
+    });
+
+    it('sanitizes users table row correctly', () => {
+      const row = {
+        id: 5,
+        username: 'admin',
+        role: 'ADMIN',
+        invalid_col: 'test',
+        password: 'pass',
+        email: null
+      };
+      const result = sanitizeRow('users', row);
+      expect(result).toEqual({
+        id: 5,
+        username: 'admin',
+        role: 'ADMIN',
+        password: 'pass'
+      });
+      expect(result.invalid_col).toBeUndefined();
+      expect(result.email).toBeUndefined();
     });
   });
 });
