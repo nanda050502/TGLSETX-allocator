@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Check, Undo2, ChevronRight, Mail } from 'lucide-react';
+import { Check, Undo2, ChevronRight } from 'lucide-react';
 
 export default function StudentSwipeCard({ student, onMarkPresent, onUndoAttendance, loading, hideSetInfo = false }) {
   const [dragOffset, setDragOffset] = useState(0);
