@@ -1,6 +1,6 @@
 import React from 'react';
 import { getBatchSessionStatus } from '../services/appStorage';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function BatchRibbon({ batches = [], selectedBatchId, onSelectBatch, label = "Batches:" }) {
   if (!batches || batches.length === 0) return null;
