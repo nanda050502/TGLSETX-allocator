@@ -1673,9 +1673,9 @@ class AppStorage {
  */
 function doPost(e) {
   try {
-    var contents = e.postData.contents;
-    var data = JSON.parse(contents);
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const contents = e.postData.contents;
+    const data = JSON.parse(contents);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     
     if (sheet.getLastRow() === 0) {
       sheet.appendRow(["Roll Number", "Student Name", "Email ID", "Room Number", "Department", "Status", "Assigned Set", "Check-in Time", "Last Updated"]);
@@ -1684,18 +1684,18 @@ function doPost(e) {
     }
     
     if (data.action === "UPDATE_ATTENDANCE") {
-      var rollNumber = String(data.roll_number).trim();
-      var dataRange = sheet.getDataRange().getValues();
-      var foundRow = -1;
+      const rollNumber = String(data.roll_number).trim();
+      const dataRange = sheet.getDataRange().getValues();
+      let foundRow = -1;
       
-      for (var i = 1; i < dataRange.length; i++) {
+      for (let i = 1; i < dataRange.length; i++) {
         if (String(dataRange[i][0]).trim().toUpperCase() === rollNumber.toUpperCase()) {
           foundRow = i + 1;
           break;
         }
       }
       
-      var nowStr = new Date().toLocaleTimeString();
+      const nowStr = new Date().toLocaleTimeString();
       if (foundRow > 0) {
         sheet.getRange(foundRow, 6).setValue(data.status);
         sheet.getRange(foundRow, 7).setValue(data.assigned_set || "");
@@ -1711,7 +1711,7 @@ function doPost(e) {
         }
       } else {
         sheet.appendRow([data.roll_number, data.name, data.email || "", data.room_number, data.department || "", data.status, data.assigned_set || "", data.checkin_time || "", nowStr]);
-        var newRow = sheet.getLastRow();
+        const newRow = sheet.getLastRow();
         if (data.status === "PRESENT") {
           sheet.getRange(newRow, 6).setBackground("#DCFCE7").setFontColor("#15803D").setFontWeight("bold");
           sheet.getRange(newRow, 7).setBackground("#E0E7FF").setFontColor("#3730A3").setFontWeight("bold");
