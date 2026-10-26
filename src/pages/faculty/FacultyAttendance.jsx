@@ -4,7 +4,7 @@ import { appStorage } from '../../services/appStorage';
 import StudentSwipeCard from '../../components/StudentSwipeCard';
 import NumericKeypad from '../../components/NumericKeypad';
 import ConfirmationModal from '../../components/ConfirmationModal';
-import { Search, Hash, RefreshCw, Users, AlertTriangle, KeyRound, Lock, CheckCircle2, Layers, Smartphone, Sparkles } from 'lucide-react';
+import { Search, Hash, RefreshCw, Users, AlertTriangle, KeyRound, Lock, CheckCircle2 } from 'lucide-react';
 
 export default function FacultyAttendance({ defaultRoomNumber, isAndroidShell = false }) {
   const { user, isAdmin } = useAuth();
