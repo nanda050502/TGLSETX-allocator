@@ -1482,10 +1482,25 @@ class AppStorage {
     const summaryRows = [];
     let dayTotal = 0, dayPresent = 0, dayAbsent = 0;
 
+    // Group rooms and students by exam_id for O(1) lookups to avoid N+1 issue
+    const roomsByExam = {};
+    this.db.rooms.forEach(r => {
+      const eid = String(r.exam_id);
+      if (!roomsByExam[eid]) roomsByExam[eid] = new Set();
+      roomsByExam[eid].add(r.room_number);
+    });
+
+    const studentsByExam = {};
+    this.db.students.forEach(s => {
+      const eid = String(s.exam_id);
+      if (!studentsByExam[eid]) studentsByExam[eid] = [];
+      studentsByExam[eid].push(s);
+    });
+
     exams.forEach(exam => {
       const sets = JSON.parse(exam.sets_json || '["Set A","Set B","Set C","Set D"]');
-      const roomsCount = new Set(this.db.rooms.filter(r => String(r.exam_id) === String(exam.id)).map(r => r.room_number)).size;
-      const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id));
+      const roomsCount = roomsByExam[String(exam.id)] ? roomsByExam[String(exam.id)].size : 0;
+      const students = studentsByExam[String(exam.id)] || [];
       const total = students.length;
       const present = students.filter(s => s.status === 'PRESENT').length;
       const absent = total - present;
@@ -1526,7 +1541,14 @@ class AppStorage {
     xlsx.utils.book_append_sheet(wb, wsSummary, 'Executive_Summary');
 
     exams.forEach((exam, idx) => {
-      const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id)).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }) || a.roll_number.localeCompare(b.roll_number));
+      const studentsForExam = studentsByExam[String(exam.id)] || [];
+      const students = [...studentsForExam].sort((a, b) => {
+        const roomA = a.room_number || '';
+        const roomB = b.room_number || '';
+        const rollA = a.roll_number || '';
+        const rollB = b.roll_number || '';
+        return roomA.localeCompare(roomB, undefined, { numeric: true }) || rollA.localeCompare(rollB);
+      });
       const sheetData = students.map(s => ({
         'Reg Number': s.roll_number,
         'Student Name': s.name,
