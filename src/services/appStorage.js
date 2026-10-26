@@ -280,17 +280,9 @@ function standardizeDate(rawDate) {
   return new Date().toISOString().split('T')[0];
 }
 
-const SEED_ADMIN_USERS = [
-  { id: 1, username: 'admin', password: 'password', name: 'Super Admin', role: 'ADMIN', email: 'admin@tgl2026.edu' },
-  { id: 2, username: 'mayank', password: 'mayank@tgl2026', name: 'Mayank', role: 'ADMIN', email: 'mayank@tgl2026.edu' },
-  { id: 3, username: 'yahya', password: 'yahya@tgl2026', name: 'Yahya', role: 'ADMIN', email: 'yahya@tgl2026.edu' },
-  { id: 4, username: 'nanda', password: 'nanda@tgl2026', name: 'Nanda', role: 'ADMIN', email: 'nanda@tgl2026.edu' },
-  { id: 5, username: 'subramanian', password: 'CEO@tgl2026', name: 'Subramanian (CEO)', role: 'ADMIN', email: 'subramanian@tgl2026.edu' }
-];
-
 function generateSeedData() {
   return {
-    users: [...SEED_ADMIN_USERS],
+    users: [],
     exams: [],
     rooms: [],
     students: [],
@@ -311,7 +303,6 @@ class AppStorage {
     } else {
       try {
         this.db = JSON.parse(existing);
-        this.ensureAdminUsers();
       } catch (e) {
         this.db = generateSeedData();
         this.save();
@@ -350,7 +341,6 @@ class AppStorage {
 
       if (usersRes.data && Array.isArray(usersRes.data) && usersRes.data.length > 0) {
         this.db.users = usersRes.data;
-        this.ensureAdminUsers();
         updated = true;
       }
 
@@ -409,19 +399,6 @@ class AppStorage {
     }
   }
 
-  ensureAdminUsers() {
-    if (!this.db.users) this.db.users = [];
-    SEED_ADMIN_USERS.forEach(adminUser => {
-      const idx = this.db.users.findIndex(u => u.username === adminUser.username);
-      if (idx >= 0) {
-        this.db.users[idx] = { ...this.db.users[idx], ...adminUser };
-      } else {
-        this.db.users.push(adminUser);
-      }
-    });
-    this.save();
-  }
-
   save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
   }
@@ -433,7 +410,41 @@ class AppStorage {
   }
 
   // Auth Methods
-  login(username, password) {
+  async login(username, password) {
+    if (isSupabaseConfigured && supabase) {
+      // Create user email format based on current app logic since auth uses username
+      // Supabase expects email, you would normally adapt your login form to ask for email
+      const email = username.includes('@') ? username : `${username}@tgl2026.edu`;
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data && data.user) {
+        // Fetch extended user info if needed, or build it
+        let localUser = this.db.users.find(u => u.email === email || u.username === username);
+
+        return {
+          success: true,
+          token: data.session.access_token,
+          user: {
+            id: localUser?.id || data.user.id,
+            username: localUser?.username || username,
+            name: localUser?.name || username,
+            role: localUser?.role || 'ADMIN',
+            email: data.user.email,
+            room_number: localUser?.room_number || '901'
+          }
+        };
+      }
+    }
+
+    // Offline / fallback auth using stored user objects (no passwords in source code)
     const user = this.db.users.find(u => u.username === username && u.password === password);
     if (!user) return { success: false, error: 'Invalid username or password' };
     

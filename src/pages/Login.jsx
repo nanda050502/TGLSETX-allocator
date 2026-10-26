@@ -7,16 +7,8 @@ export default function Login() {
   const { loginAdminOrFaculty, loginWithRoomPin } = useAuth();
   const [loginMode, setLoginMode] = useState('ROOM_PIN');
 
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('password');
-
-  const adminAccounts = [
-    { u: 'admin', p: 'password', label: 'admin' },
-    { u: 'mayank', p: 'mayank@tgl2026', label: 'mayank' },
-    { u: 'yahya', p: 'yahya@tgl2026', label: 'yahya' },
-    { u: 'nanda', p: 'nanda@tgl2026', label: 'nanda' },
-    { u: 'subramanian', p: 'CEO@tgl2026', label: 'subramanian' }
-  ];
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
   const [roomNumber, setRoomNumber] = useState('');
   const [roomPin, setRoomPin] = useState('');
@@ -239,32 +231,6 @@ export default function Login() {
             <form onSubmit={handleAccountSubmit} className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Select Admin Account
-                </label>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {adminAccounts.map((acc) => (
-                    <button
-                      key={acc.u}
-                      type="button"
-                      onClick={() => {
-                        setUsername(acc.u);
-                        setPassword(acc.p);
-                        setError(null);
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition border touch-target ${
-                        username === acc.u
-                          ? 'bg-blue-600 text-white border-blue-500 shadow-card'
-                          : 'bg-slate-950/80 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white'
-                      }`}
-                    >
-                      {acc.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                   Admin Username
                 </label>
                 <input
@@ -302,12 +268,6 @@ export default function Login() {
             </form>
           )}
 
-          {/* Chief Superintendent Admin Hint */}
-          <div className="mt-6 pt-4 border-t border-slate-800 text-center">
-            <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-              Available Admins: <b className="text-slate-200">admin</b>, <b className="text-slate-200">mayank</b>, <b className="text-slate-200">yahya</b>, <b className="text-slate-200">nanda</b>, <b className="text-slate-200">subramanian</b>
-            </p>
-          </div>
         </div>
       </div>
     </div>
