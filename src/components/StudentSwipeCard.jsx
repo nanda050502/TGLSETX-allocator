@@ -70,7 +70,6 @@ export default function StudentSwipeCard({ student, onMarkPresent, onUndoAttenda
     isHorizontalScrollRef.current = null;
   };
 
-  // Mouse drag handlers for desktop
   const handleMouseDown = (e) => {
     if (loading) return;
     setIsDragging(true);
