@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const loginAdminOrFaculty = async (username, password) => {
-    const res = appStorage.login(username, password);
+    const res = await appStorage.login(username, password);
     if (!res.success) {
       throw new Error(res.error || 'Login failed');
     }
