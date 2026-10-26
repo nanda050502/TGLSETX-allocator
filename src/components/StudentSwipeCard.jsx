@@ -29,7 +29,6 @@ export default function StudentSwipeCard({ student, onMarkPresent, onUndoAttenda
     const deltaX = currentX - startXRef.current;
     const deltaY = currentY - startYRef.current;
 
-    // Detect primary scroll direction if not determined yet
     if (isHorizontalScrollRef.current === null) {
       if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 6) {
         isHorizontalScrollRef.current = false; // Vertical page scroll
