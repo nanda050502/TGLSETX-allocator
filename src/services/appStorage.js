@@ -14,6 +14,22 @@ function getTimestampString() {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+async function hashPassword(password) {
+  if (!password) return '';
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  // Fallback if crypto.subtle is somehow unavailable
+  return password;
+}
+
 function generateId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -281,11 +297,11 @@ function standardizeDate(rawDate) {
 }
 
 const SEED_ADMIN_USERS = [
-  { id: 1, username: 'admin', password: 'password', name: 'Super Admin', role: 'ADMIN', email: 'admin@tgl2026.edu' },
-  { id: 2, username: 'mayank', password: 'mayank@tgl2026', name: 'Mayank', role: 'ADMIN', email: 'mayank@tgl2026.edu' },
-  { id: 3, username: 'yahya', password: 'yahya@tgl2026', name: 'Yahya', role: 'ADMIN', email: 'yahya@tgl2026.edu' },
-  { id: 4, username: 'nanda', password: 'nanda@tgl2026', name: 'Nanda', role: 'ADMIN', email: 'nanda@tgl2026.edu' },
-  { id: 5, username: 'subramanian', password: 'CEO@tgl2026', name: 'Subramanian (CEO)', role: 'ADMIN', email: 'subramanian@tgl2026.edu' }
+  { id: 1, username: 'admin', password: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', name: 'Super Admin', role: 'ADMIN', email: 'admin@tgl2026.edu' },
+  { id: 2, username: 'mayank', password: '578697795d14039a8f223312a4ce30cee61846852faccc6fe3af894027b6e4d8', name: 'Mayank', role: 'ADMIN', email: 'mayank@tgl2026.edu' },
+  { id: 3, username: 'yahya', password: 'f29b8ada775c6936dd3552b5c7ca3a69c23092b0e1bab89c7d01411d34916399', name: 'Yahya', role: 'ADMIN', email: 'yahya@tgl2026.edu' },
+  { id: 4, username: 'nanda', password: 'ffe7103d748fc21a29c8f0a5aba788267ef2bd8d988500f9219849ab81eac7dc', name: 'Nanda', role: 'ADMIN', email: 'nanda@tgl2026.edu' },
+  { id: 5, username: 'subramanian', password: '7ed499dfc54560f8d0f67539a62d2e18eabe2b1417a1983c05a712508f3e636d', name: 'Subramanian (CEO)', role: 'ADMIN', email: 'subramanian@tgl2026.edu' }
 ];
 
 function generateSeedData() {
@@ -433,11 +449,25 @@ class AppStorage {
   }
 
   // Auth Methods
-  login(username, password) {
-    const user = this.db.users.find(u => u.username === username && u.password === password);
+  async login(username, password) {
+    const hashed = await hashPassword(password);
+
+    // Check against hashed password, but also allow legacy plaintext passwords
+    // to match so they can be seamlessly upgraded to hashes
+    const user = this.db.users.find(u => u.username === username && (u.password === hashed || u.password === password));
     if (!user) return { success: false, error: 'Invalid username or password' };
     
-    const token = `mock-jwt-token-${user.id}-${Date.now()}`;
+    // Upgrade legacy plaintext passwords on successful login
+    if (user.password === password && password !== hashed) {
+      user.password = hashed;
+      this.save();
+      this.pushToCloud('users', [user]);
+    }
+
+    // Generate secure random token
+    const randomHex = generateId();
+    const token = `mock-jwt-token-${user.id}-${randomHex}`;
+
     return {
       success: true,
       token,
@@ -1200,7 +1230,7 @@ class AppStorage {
     return (this.db.users || []).filter(u => u.role === 'FACULTY');
   }
 
-  createUser(data) {
+  async createUser(data) {
     const { username, password, name, role, email, room_number } = data;
     if (!username || !password || !name) {
       return { success: false, error: 'Username, password, and name are required' };
@@ -1211,11 +1241,13 @@ class AppStorage {
       return { success: false, error: `Username "${username}" already exists` };
     }
 
+    const hashedPassword = await hashPassword(password.trim());
+
     const newId = Date.now();
     const newUser = {
       id: newId,
       username: username.trim(),
-      password: password.trim(),
+      password: hashedPassword,
       name: name.trim(),
       role: role || 'FACULTY',
       email: email ? email.trim() : `${username.trim()}@tgl2026.edu`,
@@ -1229,7 +1261,7 @@ class AppStorage {
     return { success: true, user: newUser, message: 'User created successfully' };
   }
 
-  updateUser(id, data) {
+  async updateUser(id, data) {
     const user = (this.db.users || []).find(u => String(u.id) === String(id));
     if (!user) return { success: false, error: 'User not found' };
 
@@ -1239,7 +1271,9 @@ class AppStorage {
       if (exists) return { success: false, error: `Username "${data.username}" is taken by another user` };
       user.username = data.username.trim();
     }
-    if (data.password) user.password = data.password.trim();
+    if (data.password && data.password.trim() !== '') {
+      user.password = await hashPassword(data.password.trim());
+    }
     if (data.role) user.role = data.role;
     if (data.email !== undefined) user.email = data.email.trim();
     if (data.room_number !== undefined) user.room_number = String(data.room_number).trim();

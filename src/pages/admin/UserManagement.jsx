@@ -27,9 +27,6 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusMsg, setStatusMsg] = useState(null);
 
-  // Password visibility map: userId -> boolean
-  const [showPasswordMap, setShowPasswordMap] = useState({});
-
   // Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -58,10 +55,6 @@ export default function UserManagement() {
     }
   };
 
-  const togglePasswordVisibility = (userId) => {
-    setShowPasswordMap(prev => ({ ...prev, [userId]: !prev[userId] }));
-  };
-
   const openCreateModal = () => {
     setEditingUser(null);
     setFormName('');
@@ -78,7 +71,7 @@ export default function UserManagement() {
     setEditingUser(user);
     setFormName(user.name || '');
     setFormUsername(user.username || '');
-    setFormPassword(user.password || '');
+    setFormPassword(''); // Don't populate with hash; leave empty for keeping the same password
     setFormRole(user.role || 'FACULTY');
     setFormEmail(user.email || '');
     setFormRoomNumber(user.room_number || '');
@@ -86,13 +79,13 @@ export default function UserManagement() {
     setStatusMsg(null);
   };
 
-  const handleSaveUser = (e) => {
+  const handleSaveUser = async (e) => {
     e.preventDefault();
     setStatusMsg(null);
 
     if (editingUser) {
       // Update
-      const res = appStorage.updateUser(editingUser.id, {
+      const res = await appStorage.updateUser(editingUser.id, {
         name: formName,
         username: formUsername,
         password: formPassword,
@@ -110,7 +103,7 @@ export default function UserManagement() {
       }
     } else {
       // Create
-      const res = appStorage.createUser({
+      const res = await appStorage.createUser({
         name: formName,
         username: formUsername,
         password: formPassword,
@@ -334,15 +327,8 @@ export default function UserManagement() {
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 text-[11px]">
-                            {isVisible ? u.password : '••••••••'}
+                            ••••••••
                           </span>
-                          <button
-                            onClick={() => togglePasswordVisibility(u.id)}
-                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
-                            title={isVisible ? 'Hide Password' : 'Show Password'}
-                          >
-                            {isVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                          </button>
                         </div>
                       </td>
 
@@ -427,12 +413,12 @@ export default function UserManagement() {
 
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                    Password *
+                    Password {editingUser ? '(Leave empty to keep current)' : '*'}
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="Password"
+                    required={!editingUser}
+                    placeholder={editingUser ? "Leave empty to keep current" : "Password"}
                     value={formPassword}
                     onChange={e => setFormPassword(e.target.value)}
                     className="w-full px-3 py-2 text-xs font-semibold font-mono rounded-xl border border-slate-200 outline-none focus:border-indigo-500 bg-slate-50"

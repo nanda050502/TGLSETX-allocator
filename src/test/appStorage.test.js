@@ -125,8 +125,8 @@ describe('AppStorage Class', () => {
   });
 
   describe('login', () => {
-    it('returns error for invalid login', () => {
-      const result = appStorage.login('invalid', 'invalid');
+    it('returns error for invalid login', async () => {
+      const result = await appStorage.login('invalid', 'invalid');
       expect(result.success).toBe(false);
       expect(result.error).toBe('Invalid username or password');
     });
