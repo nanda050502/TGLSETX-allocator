@@ -175,6 +175,21 @@ function parseSessionTimeWindow(sessionTimeStr) {
   return { startMins, endMins };
 }
 
+function buildExamObject({ id, name, subject_code, exam_date, session_time, sets_json, google_sheet_url = '', google_sheet_webhook_url = '' }) {
+  return {
+    id,
+    name,
+    subject_code,
+    exam_date,
+    session_time,
+    sets_json,
+    google_sheet_url,
+    google_sheet_webhook_url,
+    status: getBatchSessionStatus(exam_date, session_time),
+    created_at: new Date().toISOString()
+  };
+}
+
 function getBatchSessionStatus(examDateStr, sessionTimeStr, isManuallyActive = false) {
   if (isManuallyActive) return 'ACTIVE';
 
@@ -597,18 +612,19 @@ class AppStorage {
     this.db.exams.forEach(e => { if (e.status === 'ACTIVE') e.status = 'COMPLETED'; });
 
     const newId = generateId();
-    const newExam = {
+    const dateStr = exam_date || new Date().toISOString().split('T')[0];
+    const timeStr = session_time || '09:00 AM';
+
+    const newExam = buildExamObject({
       id: newId,
       name,
       subject_code,
-      exam_date: exam_date || new Date().toISOString().split('T')[0],
-      session_time: session_time || '09:00 AM',
+      exam_date: dateStr,
+      session_time: timeStr,
       sets_json: JSON.stringify(validSets),
       google_sheet_url: google_sheet_url || '',
-      google_sheet_webhook_url: google_sheet_webhook_url || '',
-      status: getBatchSessionStatus(exam_date || new Date().toISOString().split('T')[0], session_time || '09:00 AM'),
-      created_at: new Date().toISOString()
-    };
+      google_sheet_webhook_url: google_sheet_webhook_url || ''
+    });
 
     this.db.exams.push(newExam);
     this.save();
@@ -1391,18 +1407,14 @@ class AppStorage {
         } else {
           const newExamId = generateId();
           const subjectCode = g.batch.length <= 8 ? g.batch.toUpperCase() : g.batch.slice(0, 6).toUpperCase();
-          exam = {
+          exam = buildExamObject({
             id: newExamId,
             name: g.batch,
             subject_code: subjectCode,
             exam_date: g.date,
             session_time: g.assessment_time,
-            sets_json: JSON.stringify(['Set A', 'Set B', 'Set C', 'Set D']),
-            google_sheet_url: '',
-            google_sheet_webhook_url: '',
-            status: getBatchSessionStatus(g.date, g.assessment_time),
-            created_at: new Date().toISOString()
-          };
+            sets_json: JSON.stringify(['Set A', 'Set B', 'Set C', 'Set D'])
+          });
           this.db.exams.push(exam);
           createdExams.push(exam);
           examId = newExamId;
