@@ -34,7 +34,10 @@ export default function FacultyAttendance({ defaultRoomNumber, isAndroidShell = 
         setRoomNumber(rooms[0].room_number);
       }
     } catch (e) {
-      console.error(e);
+      setNotification({
+        type: 'ERROR',
+        message: 'Failed to load available rooms.'
+      });
     }
   }, []);
 
@@ -71,7 +74,10 @@ export default function FacultyAttendance({ defaultRoomNumber, isAndroidShell = 
       const roomData = appStorage.getRoomAttendance(room);
       setData(roomData);
     } catch (err) {
-      console.error(err);
+      setNotification({
+        type: 'ERROR',
+        message: 'Failed to load room data.'
+      });
     } finally {
       if (!silent) setLoading(false);
       setRefreshing(false);
