@@ -22,31 +22,61 @@ export default function DataIngestion({ onIngestionSuccess }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const normalizeMasterRow = (row) => {
-    const normalized = {};
-    for (const key of Object.keys(row)) {
+  const getNormalizedRows = (rawData) => {
+    if (!rawData || rawData.length === 0) return [];
+
+    // 1. Gather all unique keys across all rows
+    const allKeys = Array.from(
+      rawData.reduce((acc, row) => {
+        Object.keys(row).forEach(k => acc.add(k));
+        return acc;
+      }, new Set())
+    );
+
+    // 2. Compute normalizations for each key once
+    const keyToNormKey = [];
+    for (const key of allKeys) {
       const k = key.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      const val = String(row[key] !== undefined && row[key] !== null ? row[key] : '').trim();
+      let normKey = null;
 
       if (k.includes('date')) {
-        if (!normalized.date) normalized.date = val;
+        normKey = 'date';
       } else if (k.includes('batch') || k.includes('slot') || k.includes('shift')) {
-        if (!normalized.batch) normalized.batch = val;
+        normKey = 'batch';
       } else if (k.includes('assess') || k.includes('time') || k.includes('session') || k.includes('slot')) {
-        if (!normalized.assessment_time) normalized.assessment_time = val;
+        normKey = 'assessment_time';
       } else if (k.includes('room') || k.includes('hall')) {
-        if (!normalized.room_number) normalized.room_number = val;
+        normKey = 'room_number';
       } else if (k.includes('reg') || k.includes('roll') || (k.includes('id') && !k.includes('mail'))) {
-        if (!normalized.roll_number) normalized.roll_number = val;
+        normKey = 'roll_number';
       } else if (k.includes('name') || k.includes('student')) {
-        if (!normalized.name) normalized.name = val;
+        normKey = 'name';
       } else if (k.includes('mail') || k.includes('email')) {
-        if (!normalized.email) normalized.email = val;
+        normKey = 'email';
       } else if (k.includes('dept') || k.includes('branch') || k.includes('course')) {
-        if (!normalized.department) normalized.department = val;
+        normKey = 'department';
+      }
+
+      if (normKey) {
+        keyToNormKey.push({ origKey: key, normKey });
       }
     }
-    return normalized;
+
+    // 3. Map rows using cached key normalizations
+    return rawData.map(row => {
+      const normalized = {};
+      for (let i = 0; i < keyToNormKey.length; i++) {
+        const { origKey, normKey } = keyToNormKey[i];
+        if (Object.prototype.hasOwnProperty.call(row, origKey)) {
+          const rawVal = row[origKey];
+          const val = String(rawVal !== undefined && rawVal !== null ? rawVal : '').trim();
+          if (!normalized[normKey]) {
+            normalized[normKey] = val;
+          }
+        }
+      }
+      return normalized;
+    });
   };
 
   // Handle Master File Upload
@@ -67,7 +97,7 @@ export default function DataIngestion({ onIngestionSuccess }) {
           const sheetName = workbook.SheetNames[0];
           const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-          const normalizedRows = rawData.map(normalizeMasterRow);
+          const normalizedRows = getNormalizedRows(rawData);
           const res = appStorage.ingestMasterRows(normalizedRows);
 
           setResult({
@@ -122,7 +152,7 @@ export default function DataIngestion({ onIngestionSuccess }) {
       const sheetName = workbook.SheetNames[0];
       const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-      const normalizedRows = rawData.map(normalizeMasterRow);
+      const normalizedRows = getNormalizedRows(rawData);
       const res = appStorage.ingestMasterRows(normalizedRows);
 
       setResult({
