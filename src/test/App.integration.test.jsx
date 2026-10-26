@@ -41,6 +41,8 @@ describe('App Integration - End to End Flow', () => {
     // Fill credentials
     const usernameInput = screen.getByPlaceholderText('admin');
     const passwordInput = screen.getByPlaceholderText('••••••••');
+    await user.type(usernameInput, 'admin');
+    await user.type(passwordInput, 'password');
 
     await user.click(screen.getByRole('button', { name: /Sign In as Administrator/i }));
 
