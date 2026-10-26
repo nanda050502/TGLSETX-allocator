@@ -382,7 +382,7 @@ class AppStorage {
         this.evaluateBatchLifecycles();
       }
     } catch (err) {
-      console.warn('Supabase cloud sync background notice:', err);
+      // Silently ignore background sync errors in production
     }
   }
 
@@ -393,10 +393,10 @@ class AppStorage {
       const rowsToPush = rowsArray.map(r => sanitizeRow(table, r));
       const { error } = await supabase.from(table).upsert(rowsToPush);
       if (error) {
-        console.warn(`Supabase upsert error on ${table}:`, error.message);
+        // Fail silently if cloud push fails (offline-first approach)
       }
     } catch (err) {
-      console.warn(`Supabase push error on table ${table}:`, err);
+      // Fail silently if cloud push fails (offline-first approach)
     }
   }
 
@@ -405,7 +405,7 @@ class AppStorage {
     try {
       await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn(`Supabase delete error on table ${table}:`, err);
+      // Fail silently if cloud delete fails (offline-first approach)
     }
   }
 
@@ -1618,7 +1618,7 @@ class AppStorage {
         this.pushToCloud('students', [student]);
       }
     } catch (e) {
-      console.warn('Google Sheet background sync warning:', e.message);
+      // Silently ignore Google Sheet background sync errors
     }
   }
 
