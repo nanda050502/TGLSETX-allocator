@@ -616,8 +616,12 @@ class AppStorage {
     return { success: true, exam_id: newId, message: 'Exam session created successfully' };
   }
 
+  getExamById(id) {
+    return this.db.exams.find(e => String(e.id) === String(id));
+  }
+
   updateExam(id, data) {
-    const exam = this.db.exams.find(e => String(e.id) === String(id));
+    const exam = this.getExamById(id);
     if (!exam) return { success: false, error: 'Exam not found' };
 
     if (data.name) exam.name = data.name;
@@ -637,7 +641,7 @@ class AppStorage {
   // Room & Attendance Operations
   getRoomAttendance(roomNumber, examId) {
     let exam;
-    if (examId) exam = this.db.exams.find(e => String(e.id) === String(examId));
+    if (examId) exam = this.getExamById(examId);
     else exam = this.getActiveExam();
 
     if (!exam) return { error: 'No active exam found' };
@@ -730,7 +734,7 @@ class AppStorage {
       };
     }
 
-    const exam = this.db.exams.find(e => String(e.id) === String(student.exam_id));
+    const exam = this.getExamById(student.exam_id);
     let room = this.db.rooms.find(r => String(r.exam_id) === String(student.exam_id) && String(r.room_number) === String(student.room_number));
     if (!room) {
       const newRoomId = generateId();
@@ -800,7 +804,7 @@ class AppStorage {
   }
 
   toggleExamGate(examId) {
-    const exam = this.db.exams.find(e => String(e.id) === String(examId));
+    const exam = this.getExamById(examId);
     if (!exam) return { success: false, error: 'Exam not found' };
 
     exam.gate_closed = !Boolean(exam.gate_closed);
@@ -887,7 +891,7 @@ class AppStorage {
 
   finalizeRoomAttendance({ room_number, exam_id, marked_by_user_id }) {
     let exam;
-    if (exam_id) exam = this.db.exams.find(e => String(e.id) === String(exam_id));
+    if (exam_id) exam = this.getExamById(exam_id);
     else exam = this.getActiveExam();
 
     if (!exam) return { success: false, error: 'No active exam found' };
@@ -940,7 +944,7 @@ class AppStorage {
 
   reopenRoomAttendance({ room_number, exam_id }) {
     let exam;
-    if (exam_id) exam = this.db.exams.find(e => String(e.id) === String(exam_id));
+    if (exam_id) exam = this.getExamById(exam_id);
     else exam = this.getActiveExam();
 
     if (!exam) return { success: false, error: 'No active exam found' };
@@ -976,7 +980,7 @@ class AppStorage {
 
   getLatePresentees(examId) {
     let exam;
-    if (examId) exam = this.db.exams.find(e => String(e.id) === String(examId));
+    if (examId) exam = this.getExamById(examId);
     else exam = this.getActiveExam();
 
     if (!exam) return [];
@@ -993,7 +997,7 @@ class AppStorage {
     if (!query || query.trim().length < 2) return [];
 
     let exam;
-    if (examId) exam = this.db.exams.find(e => String(e.id) === String(examId));
+    if (examId) exam = this.getExamById(examId);
     else exam = this.getActiveExam();
 
     if (!exam) return [];
@@ -1010,7 +1014,7 @@ class AppStorage {
 
     if (date) {
       filtered = filtered.filter(s => {
-        const e = this.db.exams.find(ex => String(ex.id) === String(s.exam_id));
+        const e = this.getExamById(s.exam_id);
         return e && e.exam_date === date;
       });
     }
@@ -1020,7 +1024,7 @@ class AppStorage {
     }
 
     const students = filtered.map(s => {
-      const e = this.db.exams.find(ex => String(ex.id) === String(s.exam_id));
+      const e = this.getExamById(s.exam_id);
       return {
         ...s,
         batch_name: s.batch_name || e?.name || '',
@@ -1121,7 +1125,7 @@ class AppStorage {
   }
 
   getLiveOverview(examId) {
-    const exam = this.db.exams.find(e => String(e.id) === String(examId));
+    const exam = this.getExamById(examId);
     if (!exam) return { error: 'Exam not found' };
 
     const sets = JSON.parse(exam.sets_json || '[]');
@@ -1269,7 +1273,7 @@ class AppStorage {
   assignRoomFaculty(roomNumber, facultyId, roomPin, examId = null) {
     let targetExam;
     if (examId) {
-      targetExam = this.db.exams.find(e => String(e.id) === String(examId));
+      targetExam = this.getExamById(examId);
     } else {
       targetExam = this.getActiveExam();
     }
@@ -1325,7 +1329,7 @@ class AppStorage {
     const createdStudents = [];
 
     if (Object.keys(groupedBatches).length === 0 && fallbackExamId) {
-      const fallbackExam = this.db.exams.find(e => String(e.id) === String(fallbackExamId));
+      const fallbackExam = this.getExamById(fallbackExamId);
       const fBatch = fallbackExam?.name || 'Default Batch';
       const fTime = fallbackExam?.session_time || '08:00 AM - 10:00 AM';
       const fDate = fallbackExam?.exam_date || new Date().toISOString().split('T')[0];
@@ -1587,7 +1591,7 @@ class AppStorage {
       const student = this.db.students.find(s => String(s.id) === String(studentId));
       if (!student) return;
 
-      const exam = this.db.exams.find(e => String(e.id) === String(student.exam_id));
+      const exam = this.getExamById(student.exam_id);
       if (!exam || !exam.google_sheet_webhook_url) return;
 
       const payload = {
@@ -1623,7 +1627,7 @@ class AppStorage {
   }
 
   async syncAllToGoogleSheet(examId) {
-    const exam = this.db.exams.find(e => String(e.id) === String(examId));
+    const exam = this.getExamById(examId);
     if (!exam || !exam.google_sheet_webhook_url) {
       return { success: false, reason: 'No Webhook URL configured. Please paste your Google Apps Script Web App URL first.' };
     }
