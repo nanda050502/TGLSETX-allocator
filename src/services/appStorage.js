@@ -1083,9 +1083,18 @@ class AppStorage {
       const sets = JSON.parse(exam.sets_json || '[]');
 
       const examRooms = this.db.rooms.filter(r => String(r.exam_id) === String(exam.id));
+
+      const examStudents = this.db.students.filter(s => String(s.exam_id) === String(exam.id));
+      const studentsByRoom = {};
+      for (const s of examStudents) {
+        const rNum = String(s.room_number);
+        if (!studentsByRoom[rNum]) studentsByRoom[rNum] = [];
+        studentsByRoom[rNum].push(s);
+      }
+
       const rooms = examRooms.map(r => {
         const u = this.db.users.find(usr => String(usr.id) === String(r.faculty_id));
-        const roomStudents = this.db.students.filter(s => String(s.exam_id) === String(exam.id) && String(s.room_number) === String(r.room_number));
+        const roomStudents = studentsByRoom[String(r.room_number)] || [];
         const total = roomStudents.length;
         const present = roomStudents.filter(s => s.status === 'PRESENT').length;
         const absent = total - present;
@@ -1126,10 +1135,18 @@ class AppStorage {
 
     const sets = JSON.parse(exam.sets_json || '[]');
     const examRooms = this.db.rooms.filter(r => String(r.exam_id) === String(exam.id));
+    const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id));
+
+    const studentsByRoom = {};
+    for (const s of students) {
+      const rNum = String(s.room_number);
+      if (!studentsByRoom[rNum]) studentsByRoom[rNum] = [];
+      studentsByRoom[rNum].push(s);
+    }
 
     const rooms = examRooms.map(r => {
       const u = this.db.users.find(usr => String(usr.id) === String(r.faculty_id));
-      const roomStudents = this.db.students.filter(s => String(s.exam_id) === String(exam.id) && String(s.room_number) === String(r.room_number));
+      const roomStudents = studentsByRoom[String(r.room_number)] || [];
       const total = roomStudents.length;
       const present = roomStudents.filter(s => s.status === 'PRESENT').length;
       const lateCount = roomStudents.filter(s => s.status === 'PRESENT' && s.is_late).length;
@@ -1147,8 +1164,6 @@ class AppStorage {
         finalized_at: r.finalized_at || null
       };
     }).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }));
-
-    const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id));
     const total = students.length;
     const present = students.filter(s => s.status === 'PRESENT').length;
     const lateStudents = students.filter(s => s.status === 'PRESENT' && s.is_late).map(s => ({
