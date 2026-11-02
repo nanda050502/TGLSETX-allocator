@@ -70,6 +70,11 @@ export default {
         roseAccent: '#f43f5e',
         emeraldGlow: 'rgba(16, 185, 129, 0.2)',
         amberPin: '#fbbf24',
+        themeGreen: '#00a86b',
+        themeGreenHover: '#00925d',
+        themeCanvas: '#eaeff2',
+        themeYellow: '#f59e0b',
+        themeCoral: '#f43f5e',
       },
       borderRadius: {
         'xs': '0.125rem',
