@@ -62,7 +62,14 @@ export default {
           500: '#f43f5e',
           600: '#e11d48',
           700: '#be123c',
-        }
+        },
+        darkBg: '#080c14',
+        cardBg: '#101726',
+        cardHover: '#162238',
+        emeraldAccent: '#10b981',
+        roseAccent: '#f43f5e',
+        emeraldGlow: 'rgba(16, 185, 129, 0.2)',
+        amberPin: '#fbbf24',
       },
       borderRadius: {
         'xs': '0.125rem',
