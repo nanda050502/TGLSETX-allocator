@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { appStorage } from '../../services/appStorage';
-import * as xlsx from 'xlsx';
+import { appStorage, standardizeDate } from '../../services/appStorage';
+import { readSheet } from 'read-excel-file/universal';
+import Papa from 'papaparse';
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -26,10 +27,13 @@ export default function DataIngestion({ onIngestionSuccess }) {
     const normalized = {};
     for (const key of Object.keys(row)) {
       const k = key.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const rawVal = row[key];
       const val = String(row[key] !== undefined && row[key] !== null ? row[key] : '').trim();
 
       if (k.includes('date')) {
-        if (!normalized.date) normalized.date = val;
+        if (!normalized.date) {
+          normalized.date = standardizeDate(rawVal !== undefined && rawVal !== null && rawVal !== '' ? rawVal : val);
+        }
       } else if (k.includes('batch') || k.includes('slot') || k.includes('shift')) {
         if (!normalized.batch) normalized.batch = val;
       } else if (k.includes('assess') || k.includes('time') || k.includes('session') || k.includes('slot')) {
@@ -59,37 +63,71 @@ export default function DataIngestion({ onIngestionSuccess }) {
     setResult(null);
 
     try {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        try {
-          const bstr = evt.target.result;
-          const workbook = xlsx.read(bstr, { type: 'binary' });
-          const sheetName = workbook.SheetNames[0];
-          const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      if (file.name && file.name.toLowerCase().endsWith('.csv')) {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (parsed) => {
+            try {
+              const normalizedRows = (parsed.data || []).map(normalizeMasterRow);
+              const res = appStorage.ingestMasterRows(normalizedRows);
 
-          const normalizedRows = rawData.map(normalizeMasterRow);
-          const res = appStorage.ingestMasterRows(normalizedRows);
-
-          setResult({
-            type: 'success',
-            message: `Successfully ingested ${res.added} students across ${res.batchesCount} batches and ${res.roomsCount} examination halls!`,
-            count: res.added,
-            batchesCount: res.batchesCount,
-            roomsCount: res.roomsCount,
-            dates: res.dates
-          });
-          setFile(null);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          if (onIngestionSuccess) onIngestionSuccess();
-        } catch (err) {
-          setError(err.message || 'Failed to process spreadsheet format');
-        } finally {
-          setUploading(false);
+              setResult({
+                type: 'success',
+                message: `Successfully ingested ${res.added} students across ${res.batchesCount} batches and ${res.roomsCount} examination halls!`,
+                count: res.added,
+                batchesCount: res.batchesCount,
+                roomsCount: res.roomsCount,
+                dates: res.dates
+              });
+              setFile(null);
+              if (fileInputRef.current) fileInputRef.current.value = '';
+              if (onIngestionSuccess) onIngestionSuccess();
+            } catch (err) {
+              setError(err.message || 'Failed to process CSV spreadsheet');
+            } finally {
+              setUploading(false);
+            }
+          },
+          error: (err) => {
+            setError(err.message || 'Failed to read CSV file');
+            setUploading(false);
+          }
+        });
+      } else {
+        const rows = await readSheet(file);
+        if (!rows || rows.length < 2) {
+          throw new Error('Spreadsheet appears to be empty or missing header rows');
         }
-      };
-      reader.readAsBinaryString(file);
+        const headers = rows[0];
+        const rawData = rows.slice(1).map(row => {
+          const obj = {};
+          headers.forEach((h, idx) => {
+            if (h !== null && h !== undefined) {
+              obj[String(h)] = row[idx];
+            }
+          });
+          return obj;
+        });
+
+        const normalizedRows = rawData.map(normalizeMasterRow);
+        const res = appStorage.ingestMasterRows(normalizedRows);
+
+        setResult({
+          type: 'success',
+          message: `Successfully ingested ${res.added} students across ${res.batchesCount} batches and ${res.roomsCount} examination halls!`,
+          count: res.added,
+          batchesCount: res.batchesCount,
+          roomsCount: res.roomsCount,
+          dates: res.dates
+        });
+        setFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (onIngestionSuccess) onIngestionSuccess();
+        setUploading(false);
+      }
     } catch (err) {
-      setError(err.message || 'File reading error');
+      setError(err.message || 'Failed to process spreadsheet format');
       setUploading(false);
     }
   };
@@ -118,9 +156,8 @@ export default function DataIngestion({ onIngestionSuccess }) {
       }
 
       const csvText = await response.text();
-      const workbook = xlsx.read(csvText, { type: 'string' });
-      const sheetName = workbook.SheetNames[0];
-      const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      const rawData = parsed.data || [];
 
       const normalizedRows = rawData.map(normalizeMasterRow);
       const res = appStorage.ingestMasterRows(normalizedRows);
@@ -178,7 +215,7 @@ export default function DataIngestion({ onIngestionSuccess }) {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
           {[
-            { label: 'Date', desc: 'e.g. 2026-09-20' },
+            { label: 'Date', desc: 'e.g. 9/20/2026 or 2026-09-20' },
             { label: 'Batch', desc: 'e.g. Batch 1 (8-10)' },
             { label: 'Assessment Time', desc: 'e.g. 08:00 AM - 10:00 AM' },
             { label: 'Room number', desc: 'e.g. 901 to 904, 101' },

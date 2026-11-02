@@ -1,4 +1,4 @@
-import * as xlsx from 'xlsx';
+import writeExcelFile from 'write-excel-file/universal';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 const STORAGE_KEY = 'EXAMSET_PRO_DB_FRESH_V11';
@@ -234,34 +234,62 @@ function isCurrentTimeInSessionSlot(examDateStr, sessionTimeStr) {
 }
 
 function standardizeDate(rawDate) {
-  if (!rawDate) return new Date().toISOString().split('T')[0];
+  if (!rawDate && rawDate !== 0) return new Date().toISOString().split('T')[0];
+
+  // 1. JavaScript Date object (e.g. from read-excel-file)
+  if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+    const y = rawDate.getUTCFullYear();
+    const m = String(rawDate.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(rawDate.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 2. Excel numeric serial date (e.g. 46285)
   if (typeof rawDate === 'number') {
-    const dateObj = new Date((rawDate - (25567 + 2)) * 86400 * 1000);
+    const dateObj = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
     if (!isNaN(dateObj.getTime())) {
-      const y = dateObj.getFullYear();
-      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dateObj.getDate()).padStart(2, '0');
+      const y = dateObj.getUTCFullYear();
+      const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getUTCDate()).padStart(2, '0');
       return `${y}-${m}-${d}`;
     }
   }
 
   const str = String(rawDate).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (!str) return new Date().toISOString().split('T')[0];
 
-  const partsMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
-  if (partsMatch) {
-    const p1 = parseInt(partsMatch[1], 10);
-    const p2 = parseInt(partsMatch[2], 10);
-    const year = partsMatch[3];
+  // 3. Already YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:\s+.*)?$/);
+  if (ymdMatch) {
+    const y = ymdMatch[1];
+    const m = String(parseInt(ymdMatch[2], 10)).padStart(2, '0');
+    const d = String(parseInt(ymdMatch[3], 10)).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 4. M/D/YYYY or MM/DD/YYYY or D/M/YYYY or DD/MM/YYYY with 2 or 4 digit years & optional time
+  // Matches e.g. "9/20/2026", "09/20/2026", "9/20/26", "9/20/2026 12:00:00 AM", "20/09/2026"
+  const slashMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})(?:\s+.*)?$/);
+  if (slashMatch) {
+    const p1 = parseInt(slashMatch[1], 10);
+    const p2 = parseInt(slashMatch[2], 10);
+    let year = slashMatch[3];
+    if (year.length === 2) {
+      const yrNum = parseInt(year, 10);
+      year = yrNum >= 70 ? `19${year}` : `20${year}`;
+    }
 
     let month, day;
     if (p1 > 12) {
+      // Must be DD/MM/YYYY
       day = String(p1).padStart(2, '0');
       month = String(p2).padStart(2, '0');
     } else if (p2 > 12) {
+      // Must be MM/DD/YYYY (e.g. 9/20/2026)
       month = String(p1).padStart(2, '0');
       day = String(p2).padStart(2, '0');
     } else {
+      // Standard US / Excel auto-format default is MM/DD/YYYY
       month = String(p1).padStart(2, '0');
       day = String(p2).padStart(2, '0');
     }
@@ -269,6 +297,7 @@ function standardizeDate(rawDate) {
     return `${year}-${month}-${day}`;
   }
 
+  // 5. Fallback Date parsing
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     const y = parsed.getFullYear();
@@ -1472,12 +1501,39 @@ class AppStorage {
     };
   }
 
+  // Helper to convert array of objects to write-excel-file schema
+  _objectsToSheetData(objects) {
+    if (!objects || objects.length === 0) return [];
+    const keys = Object.keys(objects[0]);
+    const headerRow = keys.map(k => ({ value: String(k), fontWeight: 'bold' }));
+    const dataRows = objects.map(obj =>
+      keys.map(k => {
+        const val = obj[k];
+        if (val === null || val === undefined) return { value: '' };
+        if (typeof val === 'number') return { value: val, type: Number };
+        return { value: String(val) };
+      })
+    );
+    return [headerRow, ...dataRows];
+  }
+
+  _downloadBlob(blob, filename) {
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  }
+
   // Client side Excel exports
-  downloadDayWorkbook(date) {
+  async downloadDayWorkbook(date) {
     const exams = this.db.exams.filter(e => e.exam_date === date);
     if (!exams || exams.length === 0) return { error: `No exam sessions found for date ${date}` };
-
-    const wb = xlsx.utils.book_new();
 
     const summaryRows = [];
     let dayTotal = 0, dayPresent = 0, dayAbsent = 0;
@@ -1522,8 +1578,12 @@ class AppStorage {
       'Turnout %': dayTotal > 0 ? `${Math.round((dayPresent / dayTotal) * 100)}%` : '0%'
     });
 
-    const wsSummary = xlsx.utils.json_to_sheet(summaryRows);
-    xlsx.utils.book_append_sheet(wb, wsSummary, 'Executive_Summary');
+    const sheets = [
+      {
+        sheet: 'Executive_Summary',
+        data: this._objectsToSheetData(summaryRows)
+      }
+    ];
 
     exams.forEach((exam, idx) => {
       const students = this.db.students.filter(s => String(s.exam_id) === String(exam.id)).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }) || a.roll_number.localeCompare(b.roll_number));
@@ -1538,16 +1598,19 @@ class AppStorage {
         'Department': s.department || ''
       }));
 
-      const wsBatch = xlsx.utils.json_to_sheet(sheetData);
       const safeSheetName = (exam.name || `Batch_${idx + 1}`).replace(/[\/\?\*\\:\[\]]/g, '_').slice(0, 31);
-      xlsx.utils.book_append_sheet(wb, wsBatch, safeSheetName);
+      sheets.push({
+        sheet: safeSheetName,
+        data: this._objectsToSheetData(sheetData)
+      });
     });
 
-    xlsx.writeFile(wb, `Attendance_Master_${date}.xlsx`);
+    const blob = await writeExcelFile(sheets).toBlob();
+    this._downloadBlob(blob, `Attendance_Master_${date}.xlsx`);
     return { success: true };
   }
 
-  downloadSampleTemplate() {
+  async downloadSampleTemplate() {
     const sampleRows = [];
     const batches = [
       { name: 'Batch 1 (8-10)', time: '08:00 AM - 10:00 AM' },
@@ -1574,10 +1637,13 @@ class AppStorage {
       }
     });
 
-    const wb = xlsx.utils.book_new();
-    const ws = xlsx.utils.json_to_sheet(sampleRows);
-    xlsx.utils.book_append_sheet(wb, ws, 'Master_Exam_Schedule');
-    xlsx.writeFile(wb, 'Master_Exam_Attendance_Template.xlsx');
+    const blob = await writeExcelFile([
+      {
+        sheet: 'Master_Exam_Schedule',
+        data: this._objectsToSheetData(sampleRows)
+      }
+    ]).toBlob();
+    this._downloadBlob(blob, 'Master_Exam_Attendance_Template.xlsx');
     return { success: true };
   }
 

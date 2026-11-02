@@ -66,6 +66,14 @@ describe('appStorage utilities', () => {
     it('standardizes DD/MM/YYYY if first is > 12', () => {
       expect(standardizeDate('15/01/2023')).toBe('2023-01-15');
     });
+
+    it('standardizes Excel auto-formatted M/D/YYYY like 9/20/2026', () => {
+      expect(standardizeDate('9/20/2026')).toBe('2026-09-20');
+      expect(standardizeDate('09/20/2026')).toBe('2026-09-20');
+      expect(standardizeDate('9/20/26')).toBe('2026-09-20');
+      expect(standardizeDate('9/20/2026 12:00:00 AM')).toBe('2026-09-20');
+      expect(standardizeDate(new Date(Date.UTC(2026, 8, 20)))).toBe('2026-09-20');
+    });
   });
 });
 
