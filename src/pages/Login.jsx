@@ -1,11 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { appStorage } from '../services/appStorage';
-import { ShieldCheck, KeyRound, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
+import { ShieldCheck, KeyRound, ArrowRight, AlertCircle, Sparkles, Link as LinkIcon, ExternalLink } from 'lucide-react';
 
 export default function Login() {
   const { loginAdminOrFaculty, loginWithRoomPin } = useAuth();
-  const [loginMode, setLoginMode] = useState('ROOM_PIN');
+
+  // Helper to determine mode from URL pathname, hash, or search param
+  const getModeFromUrl = useCallback(() => {
+    if (typeof window === 'undefined') return 'ROOM_PIN';
+    const path = (window.location.pathname || '').toLowerCase();
+    const hash = (window.location.hash || '').toLowerCase();
+    const search = (window.location.search || '').toLowerCase();
+
+    if (path.includes('admin') || hash.includes('admin') || search.includes('admin')) {
+      return 'ACCOUNT';
+    }
+    return 'ROOM_PIN';
+  }, []);
+
+  const [loginMode, setLoginMode] = useState(getModeFromUrl);
 
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('password');
@@ -26,6 +40,23 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Sync state if user uses browser Back / Forward or hash changes
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const mode = getModeFromUrl();
+      setLoginMode(mode);
+      setError(null);
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, [getModeFromUrl]);
+
+  // Load available rooms for room PIN login
   useEffect(() => {
     try {
       const rooms = appStorage.getAvailableRooms();
@@ -37,6 +68,20 @@ export default function Login() {
       console.error(e);
     }
   }, []);
+
+  // Switch mode and update browser URL
+  const switchLoginMode = (mode) => {
+    setLoginMode(mode);
+    setError(null);
+    const targetUrl = mode === 'ACCOUNT' ? '/admin' : '/room';
+    if (typeof window !== 'undefined' && window.history) {
+      try {
+        window.history.pushState({ mode }, '', targetUrl);
+      } catch {
+        window.location.hash = mode === 'ACCOUNT' ? '#admin' : '#room';
+      }
+    }
+  };
 
   const handleAccountSubmit = async (e) => {
     e.preventDefault();
@@ -64,25 +109,9 @@ export default function Login() {
     }
   };
 
-  const fillDemoCreds = (type) => {
-    setError(null);
-    if (type === 'ADMIN') {
-      setLoginMode('ACCOUNT');
-      setUsername('admin');
-      setPassword('password');
-    } else if (type === 'ROOM_901') {
-      setLoginMode('ROOM_PIN');
-      setRoomNumber('901');
-      setRoomPin('1234');
-    } else {
-      setLoginMode('ROOM_PIN');
-      setRoomNumber('902');
-      setRoomPin('1234');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased">
+      {/* Brand & Portal Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-blue-600 flex items-center justify-center font-extrabold text-2xl text-white shadow-xl mb-4">
           Q
@@ -90,43 +119,79 @@ export default function Login() {
         <h1 className="text-3xl font-extrabold tracking-tight text-white">
           ExamSet Pro
         </h1>
-        <p className="text-xs text-slate-400 mt-1 font-medium max-w-sm mx-auto">
-          Exam Attendance Verification & Chronological Paper Set Allocator
-        </p>
+
+        {loginMode === 'ACCOUNT' ? (
+          <div className="mt-2 space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold">
+              <ShieldCheck size={14} />
+              <span>Administrator Portal Login</span>
+            </div>
+            <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto">
+              Secure authentication for chief superintendents, controllers & administrators
+            </p>
+          </div>
+        ) : (
+          <div className="mt-2 space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold">
+              <KeyRound size={14} />
+              <span>Invigilator Room PIN Sign In</span>
+            </div>
+            <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto">
+              Fast examination room & hall access for invigilators and faculty
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-900/90 backdrop-blur-md py-6 px-5 sm:px-8 rounded-2xl shadow-toast border border-slate-800">
-          {/* Segmented Control */}
-          <div className="flex p-1 bg-slate-950/80 rounded-xl mb-6 border border-slate-800">
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMode('ROOM_PIN');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 touch-target ${
-                loginMode === 'ROOM_PIN'
-                  ? 'bg-emerald-600 text-white shadow-card'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <KeyRound size={15} /> Room PIN Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMode('ACCOUNT');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-target ${
-                loginMode === 'ACCOUNT'
-                  ? 'bg-blue-600 text-white shadow-card'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <ShieldCheck size={15} /> Admin Account
-            </button>
+          {/* Direct Link Badges & Segmented Switch Tabs */}
+          <div className="mb-6">
+            <div className="flex p-1 bg-slate-950/80 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => switchLoginMode('ROOM_PIN')}
+                className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 touch-target ${
+                  loginMode === 'ROOM_PIN'
+                    ? 'bg-emerald-600 text-white shadow-card'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <KeyRound size={15} />
+                <span>Room PIN Sign In</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchLoginMode('ACCOUNT')}
+                className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-target ${
+                  loginMode === 'ACCOUNT'
+                    ? 'bg-blue-600 text-white shadow-card'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ShieldCheck size={15} />
+                <span>Admin Account</span>
+              </button>
+            </div>
+
+            {/* Active URL Indicator */}
+            <div className="mt-2.5 flex items-center justify-between px-2 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1">
+                <LinkIcon size={12} className="text-slate-500" />
+                <span>Direct Link:</span>
+                <code className="font-mono font-bold text-slate-300 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                  {loginMode === 'ACCOUNT' ? '/admin' : '/room'}
+                </code>
+              </span>
+              <button
+                type="button"
+                onClick={() => switchLoginMode(loginMode === 'ACCOUNT' ? 'ROOM_PIN' : 'ACCOUNT')}
+                className="text-slate-400 hover:text-white font-semibold transition inline-flex items-center gap-1 hover:underline text-[11px]"
+              >
+                <span>Switch to {loginMode === 'ACCOUNT' ? 'Room PIN' : 'Admin'}</span>
+                <ExternalLink size={11} />
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -136,7 +201,7 @@ export default function Login() {
             </div>
           )}
 
-          {/* Room PIN Form */}
+          {/* Room PIN Form (/room link) */}
           {loginMode === 'ROOM_PIN' ? (
             <form onSubmit={handleRoomPinSubmit} className="space-y-4">
               <div>
@@ -234,12 +299,27 @@ export default function Login() {
                 <span>{loading ? 'Verifying PIN...' : 'Access Room Attendance'}</span>
                 <ArrowRight size={15} />
               </button>
+
+              {/* Dedicated Navigation Link to Admin */}
+              <div className="pt-3 border-t border-slate-800/80 text-center">
+                <p className="text-xs text-slate-400">
+                  Are you an Examination Controller?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchLoginMode('ACCOUNT')}
+                    className="text-blue-400 hover:text-blue-300 font-bold underline transition"
+                  >
+                    Go to Admin Login (/admin) →
+                  </button>
+                </p>
+              </div>
             </form>
           ) : (
+            /* Admin Account Form (/admin link) */
             <form onSubmit={handleAccountSubmit} className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Select Admin Account
+                  Quick Select Admin Account
                 </label>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {adminAccounts.map((acc) => (
@@ -299,14 +379,34 @@ export default function Login() {
                 <span>{loading ? 'Signing in...' : 'Sign In as Administrator'}</span>
                 <ArrowRight size={15} />
               </button>
+
+              {/* Dedicated Navigation Link to Room PIN */}
+              <div className="pt-3 border-t border-slate-800/80 text-center">
+                <p className="text-xs text-slate-400">
+                  Taking attendance in an examination hall?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchLoginMode('ROOM_PIN')}
+                    className="text-emerald-400 hover:text-emerald-300 font-bold underline transition"
+                  >
+                    Go to Room PIN Sign In (/room) →
+                  </button>
+                </p>
+              </div>
             </form>
           )}
 
-          {/* Chief Superintendent Admin Hint */}
+          {/* Footer Info */}
           <div className="mt-6 pt-4 border-t border-slate-800 text-center">
-            <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-              Available Admins: <b className="text-slate-200">admin</b>, <b className="text-slate-200">mayank</b>, <b className="text-slate-200">yahya</b>, <b className="text-slate-200">nanda</b>, <b className="text-slate-200">subramanian</b>
-            </p>
+            {loginMode === 'ACCOUNT' ? (
+              <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                Available Admins: <b className="text-slate-200">admin</b>, <b className="text-slate-200">mayank</b>, <b className="text-slate-200">yahya</b>, <b className="text-slate-200">nanda</b>, <b className="text-slate-200">subramanian</b>
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                Default Room Access PIN is <b className="text-emerald-400 font-mono">1234</b> for all examination halls.
+              </p>
+            )}
           </div>
         </div>
       </div>

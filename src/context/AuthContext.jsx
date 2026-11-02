@@ -11,10 +11,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const logout = () => {
+    const wasAdmin = user?.role === 'ADMIN';
     localStorage.removeItem('exam_auth_token');
     localStorage.removeItem('exam_auth_user');
     setToken(null);
     setUser(null);
+    if (typeof window !== 'undefined' && window.history) {
+      try {
+        window.history.pushState(null, '', wasAdmin ? '/admin' : '/room');
+      } catch {
+        window.location.hash = wasAdmin ? '#admin' : '#room';
+      }
+    }
   };
 
   useEffect(() => {
