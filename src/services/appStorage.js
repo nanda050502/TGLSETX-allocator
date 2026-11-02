@@ -309,6 +309,13 @@ function standardizeDate(rawDate) {
   return new Date().toISOString().split('T')[0];
 }
 
+export function getUniversalRoomPin(roomNumber) {
+  if (!roomNumber) return '1010';
+  const clean = String(roomNumber).trim();
+  // Universal rule: RoomNo + "0" (e.g. 101 -> 1010, 901 -> 9010, TP008 -> TP0080)
+  return `${clean}0`;
+}
+
 const SEED_ADMIN_USERS = [
   { id: 1, username: 'admin', password: 'password', name: 'Super Admin', role: 'ADMIN', email: 'admin@tgl2026.edu' },
   { id: 2, username: 'mayank', password: 'mayank@tgl2026', name: 'Mayank', role: 'ADMIN', email: 'mayank@tgl2026.edu' },
@@ -341,6 +348,7 @@ class AppStorage {
       try {
         this.db = JSON.parse(existing);
         this.ensureAdminUsers();
+        this.ensureUniversalRoomPins();
       } catch (e) {
         this.db = generateSeedData();
         this.save();
@@ -438,6 +446,20 @@ class AppStorage {
     }
   }
 
+  ensureUniversalRoomPins() {
+    if (!this.db || !Array.isArray(this.db.rooms)) return;
+    let modified = false;
+    this.db.rooms.forEach(r => {
+      if (!r.room_pin || (r.room_number && r.room_number.length > 4 && r.room_pin === r.room_number.slice(-4))) {
+        r.room_pin = getUniversalRoomPin(r.room_number);
+        modified = true;
+      }
+    });
+    if (modified) {
+      this.save();
+    }
+  }
+
   ensureAdminUsers() {
     if (!this.db.users) this.db.users = [];
     SEED_ADMIN_USERS.forEach(adminUser => {
@@ -482,17 +504,88 @@ class AppStorage {
   }
 
   roomPinLogin(roomNumber, roomPin, staffName) {
-    const activeExam = this.getActiveExam();
-    if (!activeExam) return { success: false, error: 'No active exam session' };
+    const cleanRoom = String(roomNumber || '').trim();
+    const cleanPin = String(roomPin || '').trim();
+    if (!cleanRoom) return { success: false, error: 'Please enter a room number' };
+    if (!cleanPin) return { success: false, error: `Invalid PIN for Room ${cleanRoom}` };
 
-    const room = this.db.rooms.find(r => String(r.exam_id) === String(activeExam.id) && String(r.room_number) === String(roomNumber));
-    if (!room || String(room.room_pin) !== String(roomPin)) {
-      return { success: false, error: `Invalid PIN for Room ${roomNumber}` };
+    // 1. Search in the currently active exam
+    let activeExam = this.getActiveExam();
+    let room = activeExam
+      ? this.db.rooms.find(r => String(r.exam_id) === String(activeExam.id) && String(r.room_number).toLowerCase() === cleanRoom.toLowerCase())
+      : null;
+
+    // 2. If not found in activeExam, check candidate rooms across all exams
+    if (!room) {
+      const candidateRooms = this.db.rooms.filter(r => String(r.room_number).toLowerCase() === cleanRoom.toLowerCase());
+      if (candidateRooms.length > 0) {
+        // Find if any candidate room has an active batch
+        const roomWithActiveExam = candidateRooms.find(r => {
+          const ex = this.db.exams.find(e => String(e.id) === String(r.exam_id));
+          return ex && (ex.status === 'ACTIVE' || ex.status === 'MANUAL_ACTIVE');
+        });
+
+        if (roomWithActiveExam) {
+          room = roomWithActiveExam;
+          activeExam = this.db.exams.find(e => String(e.id) === String(room.exam_id));
+        } else {
+          // If no batch is active anywhere, auto-activate this room's batch
+          const anyActive = this.db.exams.some(e => e.status === 'ACTIVE' || e.status === 'MANUAL_ACTIVE');
+          const candidate = candidateRooms[0];
+          const candidateExam = this.db.exams.find(e => String(e.id) === String(candidate.exam_id));
+
+          if (!anyActive && candidateExam) {
+            this.switchActiveExam(candidateExam.id);
+            activeExam = candidateExam;
+            room = candidate;
+          } else if (candidateExam) {
+            // Rule 2: Active Batch Requirement
+            return {
+              success: false,
+              error: `Room ${cleanRoom} belongs to batch "${candidateExam.name}" which is currently ${candidateExam.status}. The room's batch must be marked as ACTIVE for room PIN logins to succeed.`
+            };
+          }
+        }
+      }
+    }
+
+    if (!room) {
+      return { success: false, error: `Invalid PIN for Room ${cleanRoom}` };
+    }
+
+    // Universal PIN Validation:
+    // Matches:
+    // 1. Stored room PIN (custom or auto-assigned)
+    // 2. Universal format: RoomNo + "0" (e.g. 101 -> 1010, 901 -> 9010, TP008 -> TP0080)
+    // 3. Universal fallback PIN: 1234
+    // 4. Legacy slice PIN: last 4 chars, or digits only + "0"
+    const universalPin = getUniversalRoomPin(room.room_number);
+    const universalFallbackPin = '1234';
+    const legacySlicePin = cleanRoom.length > 4 ? cleanRoom.slice(-4) : `${cleanRoom}0`;
+    const digitsOnly = cleanRoom.replace(/\D/g, '');
+    const digitsPin = digitsOnly ? `${digitsOnly}0` : null;
+
+    const enteredPinLower = cleanPin.toLowerCase();
+    const isPinMatch =
+      (room.room_pin && String(room.room_pin).trim().toLowerCase() === enteredPinLower) ||
+      universalPin.toLowerCase() === enteredPinLower ||
+      universalFallbackPin === enteredPinLower ||
+      legacySlicePin.toLowerCase() === enteredPinLower ||
+      (digitsPin && digitsPin.toLowerCase() === enteredPinLower);
+
+    if (!isPinMatch) {
+      return { success: false, error: `Invalid PIN for Room ${cleanRoom}` };
+    }
+
+    // Ensure room has canonical universal PIN stored if missing
+    if (!room.room_pin) {
+      room.room_pin = universalPin;
+      this.save();
     }
 
     let facultyName = staffName?.trim() || room.faculty_name;
     if (!facultyName) {
-      facultyName = `Invigilator (Room ${roomNumber})`;
+      facultyName = `Invigilator (Room ${cleanRoom})`;
     } else if (staffName?.trim()) {
       room.faculty_name = staffName.trim();
       this.save();
@@ -501,10 +594,10 @@ class AppStorage {
 
     let faculty = this.db.users.find(u => String(u.id) === String(room.faculty_id));
     if (!faculty) {
-      faculty = { id: 999, name: facultyName, username: `invigilator_${roomNumber}`, role: 'FACULTY', email: `room${roomNumber}@university.edu` };
+      faculty = { id: 999, name: facultyName, username: `invigilator_${cleanRoom}`, role: 'FACULTY', email: `room${cleanRoom}@university.edu` };
     }
 
-    const token = `mock-room-pin-token-${roomNumber}-${Date.now()}`;
+    const token = `mock-room-pin-token-${cleanRoom}-${Date.now()}`;
     return {
       success: true,
       token,
@@ -513,20 +606,35 @@ class AppStorage {
         username: faculty.username,
         name: facultyName,
         role: 'FACULTY',
-        room_number: roomNumber
+        room_number: cleanRoom
       }
     };
   }
 
   getAvailableRooms() {
-    const activeExam = this.getActiveExam();
-    if (!activeExam) return [];
+    let activeExam = this.getActiveExam();
+    let examRooms = activeExam ? this.db.rooms.filter(r => String(r.exam_id) === String(activeExam.id)) : [];
 
-    const examRooms = this.db.rooms.filter(r => String(r.exam_id) === String(activeExam.id));
-    return examRooms.map(r => {
+    // Fallback: if activeExam has no rooms or is null, include all rooms from DB
+    if (examRooms.length === 0 && this.db.rooms.length > 0) {
+      examRooms = this.db.rooms;
+    }
+
+    const seen = new Set();
+    const uniqueRooms = [];
+    for (const r of examRooms) {
+      const key = String(r.room_number).toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueRooms.push(r);
+      }
+    }
+
+    return uniqueRooms.map(r => {
       const f = this.db.users.find(u => String(u.id) === String(r.faculty_id));
       return {
         room_number: r.room_number,
+        room_pin: r.room_pin || getUniversalRoomPin(r.room_number),
         faculty_name: f ? f.name : (r.faculty_name || 'Unassigned'),
         has_pin: true
       };
@@ -674,7 +782,7 @@ class AppStorage {
     let room = this.db.rooms.find(r => String(r.exam_id) === String(exam.id) && String(r.room_number) === String(roomNumber));
     if (!room) {
       const newRoomId = generateId();
-      const pin = String(roomNumber).length <= 4 ? `${roomNumber}0` : String(roomNumber).slice(-4);
+      const pin = getUniversalRoomPin(roomNumber);
       room = {
         id: newRoomId,
         exam_id: exam.id,
@@ -763,7 +871,7 @@ class AppStorage {
     let room = this.db.rooms.find(r => String(r.exam_id) === String(student.exam_id) && String(r.room_number) === String(student.room_number));
     if (!room) {
       const newRoomId = generateId();
-      const pin = String(student.room_number).length <= 4 ? `${student.room_number}0` : String(student.room_number).slice(-4);
+      const pin = getUniversalRoomPin(student.room_number);
       room = { id: newRoomId, exam_id: student.exam_id, room_number: String(student.room_number), faculty_id: null, room_pin: pin, current_set_index: 0, room_finalized: false, draft_counter: 0 };
       this.db.rooms.push(room);
     }
@@ -1307,7 +1415,7 @@ class AppStorage {
     let room = this.db.rooms.find(r => String(r.exam_id) === String(targetExam.id) && String(r.room_number) === String(roomNumber));
     if (!room) {
       const newRoomId = generateId();
-      room = { id: newRoomId, exam_id: targetExam.id, room_number: String(roomNumber), faculty_id: facultyId ? Number(facultyId) : null, room_pin: roomPin || `${roomNumber}0`, current_set_index: 0 };
+      room = { id: newRoomId, exam_id: targetExam.id, room_number: String(roomNumber), faculty_id: facultyId ? Number(facultyId) : null, room_pin: roomPin || getUniversalRoomPin(roomNumber), current_set_index: 0 };
       this.db.rooms.push(room);
     } else {
       room.faculty_id = facultyId ? Number(facultyId) : null;
@@ -1366,7 +1474,7 @@ class AppStorage {
 
         let room = this.db.rooms.find(rm => String(rm.exam_id) === String(fallbackExamId) && rm.room_number === roomNo);
         if (!room) {
-          const pin = roomNo.length <= 4 ? `${roomNo}0` : roomNo.slice(-4);
+          const pin = getUniversalRoomPin(roomNo);
           const newRoomId = generateId();
           room = { id: newRoomId, exam_id: fallbackExamId, room_number: roomNo, faculty_id: null, room_pin: pin, current_set_index: 0 };
           this.db.rooms.push(room);
@@ -1443,7 +1551,7 @@ class AppStorage {
 
           let room = this.db.rooms.find(rm => String(rm.exam_id) === String(examId) && rm.room_number === roomNo);
           if (!room) {
-            const pin = roomNo.length <= 4 ? `${roomNo}0` : roomNo.slice(-4);
+            const pin = getUniversalRoomPin(roomNo);
             const newRoomId = generateId();
             room = { id: newRoomId, exam_id: examId, room_number: roomNo, faculty_id: null, room_pin: pin, current_set_index: 0 };
             this.db.rooms.push(room);

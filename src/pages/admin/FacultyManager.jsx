@@ -174,10 +174,10 @@ export default function FacultyManager() {
         <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
           <div className="font-bold text-slate-900 flex items-center gap-1.5">
             <Key size={14} className="text-slate-700" />
-            <span>Room PIN Login Rules:</span>
+            <span>Universal Room PIN Login Rules:</span>
           </div>
           <p className="text-[11px] leading-relaxed">
-            1. <b>Auto-generated PINs</b>: For imported rooms, default PIN is generated as <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-slate-800 border border-slate-200">RoomNo + "0"</code> (e.g., Room <b>101</b> &rarr; PIN <b>1010</b>, Room <b>901</b> &rarr; PIN <b>9010</b>).
+            1. <b>Universal Auto-generated PINs</b>: For all imported halls, default PIN is universally generated as <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-slate-800 border border-slate-200">RoomNo + "0"</code> (e.g., Room <b>101</b> &rarr; PIN <b>1010</b>, Room <b>901</b> &rarr; PIN <b>9010</b>, Room <b>TP008</b> &rarr; PIN <b>TP0080</b>). Universal fallback PIN <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-slate-800 border border-slate-200">1234</code> is also supported.
             <br />
             2. <b>Active Batch Requirement</b>: The room's batch must be marked as <b>ACTIVE</b> for room PIN logins to succeed.
             <br />
@@ -208,11 +208,11 @@ export default function FacultyManager() {
 
 function RoomRow({ room, facultyList, onSave }) {
   const [selectedFaculty, setSelectedFaculty] = useState(room.faculty_id || '');
-  const [pin, setPin] = useState(room.room_pin || '1234');
+  const [pin, setPin] = useState(room.room_pin || `${room.room_number}0`);
   const [changed, setChanged] = useState(false);
 
   useEffect(() => {
-    setPin(room.room_pin || '1234');
+    setPin(room.room_pin || `${room.room_number}0`);
   }, [room.room_pin]);
 
   return (

@@ -147,5 +147,33 @@ describe('AppStorage Class', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('Invalid PIN for Room 999');
     });
+
+    it('authenticates room with universal PIN format RoomNo + "0" (e.g. 101 -> 1010)', () => {
+      appStorage.db.exams.push({ id: 'exam_u1', name: 'Batch 1', status: 'ACTIVE' });
+      appStorage.db.rooms.push({ id: 'r_101', exam_id: 'exam_u1', room_number: '101', room_pin: '1010' });
+
+      const result = appStorage.roomPinLogin('101', '1010', 'Prof. Alex');
+      expect(result.success).toBe(true);
+      expect(result.user.room_number).toBe('101');
+      expect(result.user.role).toBe('FACULTY');
+    });
+
+    it('authenticates alphanumeric room like TP008 with universal PIN TP0080', () => {
+      appStorage.db.exams.push({ id: 'exam_u2', name: 'Batch 1', status: 'ACTIVE' });
+      appStorage.db.rooms.push({ id: 'r_tp008', exam_id: 'exam_u2', room_number: 'TP008', room_pin: 'TP0080' });
+
+      const result = appStorage.roomPinLogin('TP008', 'TP0080', 'Invigilator');
+      expect(result.success).toBe(true);
+      expect(result.user.room_number).toBe('TP008');
+    });
+
+    it('authenticates room with universal fallback PIN 1234', () => {
+      appStorage.db.exams.push({ id: 'exam_u3', name: 'Batch 1', status: 'ACTIVE' });
+      appStorage.db.rooms.push({ id: 'r_901', exam_id: 'exam_u3', room_number: '901', room_pin: '9010' });
+
+      const result = appStorage.roomPinLogin('901', '1234', 'Prof. Bob');
+      expect(result.success).toBe(true);
+      expect(result.user.room_number).toBe('901');
+    });
   });
 });

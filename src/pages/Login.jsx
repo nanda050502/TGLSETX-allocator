@@ -215,15 +215,15 @@ export default function Login() {
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  2. Room Access PIN (Default: 1234)
+                  2. Room Access PIN {roomNumber ? `(Default: ${roomNumber}0)` : '(RoomNo + 0)'}
                 </label>
                 <input
                   type="password"
-                  inputMode="numeric"
-                  maxLength={6}
+                  inputMode="text"
+                  maxLength={12}
                   value={roomPin}
                   onChange={(e) => setRoomPin(e.target.value)}
-                  placeholder="••••"
+                  placeholder={roomNumber ? `${roomNumber}0` : "••••"}
                   required
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 font-mono font-black text-emerald-400 text-lg tracking-widest text-center transition outline-none"
                 />
@@ -264,7 +264,7 @@ export default function Login() {
                   </button>
                 </p>
                 <p className="text-[11px] text-slate-500 font-medium mt-2">
-                  Default Room Access PIN is <b className="text-emerald-400 font-mono">1234</b> for all halls.
+                  Universal Room PIN is <b className="text-emerald-400 font-mono">{roomNumber ? `${roomNumber}0` : 'RoomNo + "0"'}</b> (e.g. Room 101 → <b className="text-emerald-400 font-mono">1010</b>). Fallback PIN <b className="text-emerald-400 font-mono">1234</b> is also accepted.
                 </p>
               </div>
             </form>

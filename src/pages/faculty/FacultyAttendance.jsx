@@ -218,7 +218,7 @@ export default function FacultyAttendance({ defaultRoomNumber, isAndroidShell = 
   const presentCount = data?.stats?.present ?? 0;
   const absentCount = data?.stats?.absent ?? 0;
   const verifiedPercent = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
-  const currentRoomPin = data?.room?.room_pin || '1234';
+  const currentRoomPin = data?.room?.room_pin || (roomNumber ? `${roomNumber}0` : '1010');
   const batchName = data?.students?.[0]?.batch_name || 'Batch 1';
   const assessmentTime = data?.students?.[0]?.assessment_time || '11:00 AM - 01:30 PM';
 
