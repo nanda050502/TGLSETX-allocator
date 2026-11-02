@@ -35,8 +35,8 @@ describe('App Integration - End to End Flow', () => {
 
     expect(screen.getByText('ExamSet Pro')).toBeInTheDocument();
 
-    // Switch to Admin Console tab
-    await user.click(screen.getByText(/Admin Account/i));
+    // Switch to Admin Login via bottom link
+    await user.click(screen.getByText(/Go to Admin Login/i));
 
     // Fill credentials
     const usernameInput = screen.getByPlaceholderText('admin');

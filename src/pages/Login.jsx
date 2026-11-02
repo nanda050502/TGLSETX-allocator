@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { appStorage } from '../services/appStorage';
-import { ShieldCheck, KeyRound, ArrowRight, AlertCircle, Sparkles, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { ShieldCheck, KeyRound, ArrowRight, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const { loginAdminOrFaculty, loginWithRoomPin } = useAuth();
@@ -111,7 +111,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased">
-      {/* Brand & Portal Header */}
+      {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-blue-600 flex items-center justify-center font-extrabold text-2xl text-white shadow-xl mb-4">
           Q
@@ -124,10 +124,10 @@ export default function Login() {
           <div className="mt-2 space-y-1">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold">
               <ShieldCheck size={14} />
-              <span>Administrator Portal Login</span>
+              <span>Administrator Sign In</span>
             </div>
             <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto">
-              Secure authentication for chief superintendents, controllers & administrators
+              Examination superintendents & admin portal
             </p>
           </div>
         ) : (
@@ -137,7 +137,7 @@ export default function Login() {
               <span>Invigilator Room PIN Sign In</span>
             </div>
             <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto">
-              Fast examination room & hall access for invigilators and faculty
+              Examination hall attendance & set allocation
             </p>
           </div>
         )}
@@ -145,55 +145,6 @@ export default function Login() {
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-900/90 backdrop-blur-md py-6 px-5 sm:px-8 rounded-2xl shadow-toast border border-slate-800">
-          {/* Direct Link Badges & Segmented Switch Tabs */}
-          <div className="mb-6">
-            <div className="flex p-1 bg-slate-950/80 rounded-xl border border-slate-800">
-              <button
-                type="button"
-                onClick={() => switchLoginMode('ROOM_PIN')}
-                className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 touch-target ${
-                  loginMode === 'ROOM_PIN'
-                    ? 'bg-emerald-600 text-white shadow-card'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <KeyRound size={15} />
-                <span>Room PIN Sign In</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchLoginMode('ACCOUNT')}
-                className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 touch-target ${
-                  loginMode === 'ACCOUNT'
-                    ? 'bg-blue-600 text-white shadow-card'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <ShieldCheck size={15} />
-                <span>Admin Account</span>
-              </button>
-            </div>
-
-            {/* Active URL Indicator */}
-            <div className="mt-2.5 flex items-center justify-between px-2 text-[11px] text-slate-400">
-              <span className="flex items-center gap-1">
-                <LinkIcon size={12} className="text-slate-500" />
-                <span>Direct Link:</span>
-                <code className="font-mono font-bold text-slate-300 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
-                  {loginMode === 'ACCOUNT' ? '/admin' : '/room'}
-                </code>
-              </span>
-              <button
-                type="button"
-                onClick={() => switchLoginMode(loginMode === 'ACCOUNT' ? 'ROOM_PIN' : 'ACCOUNT')}
-                className="text-slate-400 hover:text-white font-semibold transition inline-flex items-center gap-1 hover:underline text-[11px]"
-              >
-                <span>Switch to {loginMode === 'ACCOUNT' ? 'Room PIN' : 'Admin'}</span>
-                <ExternalLink size={11} />
-              </button>
-            </div>
-          </div>
-
           {error && (
             <div className="mb-4 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center gap-2 animate-slide-up">
               <AlertCircle size={16} className="shrink-0 text-rose-400" />
@@ -201,7 +152,7 @@ export default function Login() {
             </div>
           )}
 
-          {/* Room PIN Form (/room link) */}
+          {/* Room PIN Form (Default at opening / /room link) */}
           {loginMode === 'ROOM_PIN' ? (
             <form onSubmit={handleRoomPinSubmit} className="space-y-4">
               <div>
@@ -300,17 +251,20 @@ export default function Login() {
                 <ArrowRight size={15} />
               </button>
 
-              {/* Dedicated Navigation Link to Admin */}
-              <div className="pt-3 border-t border-slate-800/80 text-center">
+              {/* Bottom Navigation Link to Admin */}
+              <div className="pt-4 mt-6 border-t border-slate-800 text-center">
                 <p className="text-xs text-slate-400">
                   Are you an Examination Controller?{' '}
                   <button
                     type="button"
                     onClick={() => switchLoginMode('ACCOUNT')}
-                    className="text-blue-400 hover:text-blue-300 font-bold underline transition"
+                    className="text-blue-400 hover:text-blue-300 font-bold underline transition inline-flex items-center gap-1"
                   >
-                    Go to Admin Login (/admin) →
+                    <span>Go to Admin Login (/admin) →</span>
                   </button>
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-2">
+                  Default Room Access PIN is <b className="text-emerald-400 font-mono">1234</b> for all halls.
                 </p>
               </div>
             </form>
@@ -380,34 +334,24 @@ export default function Login() {
                 <ArrowRight size={15} />
               </button>
 
-              {/* Dedicated Navigation Link to Room PIN */}
-              <div className="pt-3 border-t border-slate-800/80 text-center">
+              {/* Bottom Navigation Link to Room PIN */}
+              <div className="pt-4 mt-6 border-t border-slate-800 text-center">
                 <p className="text-xs text-slate-400">
                   Taking attendance in an examination hall?{' '}
                   <button
                     type="button"
                     onClick={() => switchLoginMode('ROOM_PIN')}
-                    className="text-emerald-400 hover:text-emerald-300 font-bold underline transition"
+                    className="text-emerald-400 hover:text-emerald-300 font-bold underline transition inline-flex items-center gap-1"
                   >
-                    Go to Room PIN Sign In (/room) →
+                    <span>Go to Room PIN Sign In (/room) →</span>
                   </button>
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-2 leading-relaxed">
+                  Available Admins: <b className="text-slate-300">admin</b>, <b className="text-slate-300">mayank</b>, <b className="text-slate-300">yahya</b>, <b className="text-slate-300">nanda</b>, <b className="text-slate-300">subramanian</b>
                 </p>
               </div>
             </form>
           )}
-
-          {/* Footer Info */}
-          <div className="mt-6 pt-4 border-t border-slate-800 text-center">
-            {loginMode === 'ACCOUNT' ? (
-              <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                Available Admins: <b className="text-slate-200">admin</b>, <b className="text-slate-200">mayank</b>, <b className="text-slate-200">yahya</b>, <b className="text-slate-200">nanda</b>, <b className="text-slate-200">subramanian</b>
-              </p>
-            ) : (
-              <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                Default Room Access PIN is <b className="text-emerald-400 font-mono">1234</b> for all examination halls.
-              </p>
-            )}
-          </div>
         </div>
       </div>
     </div>
