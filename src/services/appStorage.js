@@ -744,10 +744,11 @@ class AppStorage {
 
     // Evaluate target status for each batch based on start and end time window
     this.db.exams.forEach(exam => {
+      const isManual = exam.status === 'MANUAL_ACTIVE' || exam.is_manual_active === true;
       const targetStatus = getBatchSessionStatus(
         exam.exam_date,
         exam.session_time,
-        exam.status === 'MANUAL_ACTIVE'
+        isManual
       );
 
       if (exam.status !== targetStatus) {
@@ -799,7 +800,9 @@ class AppStorage {
     this.db.exams.forEach(e => {
       if (String(e.id) === String(examId)) {
         e.status = 'ACTIVE';
+        e.is_manual_active = true;
       } else {
+        e.is_manual_active = false;
         const calc = getBatchSessionStatus(e.exam_date, e.session_time);
         e.status = calc === 'ACTIVE' ? 'COMPLETED' : calc;
       }
@@ -854,6 +857,7 @@ class AppStorage {
     if (data.subject_code) exam.subject_code = data.subject_code;
     if (data.exam_date) exam.exam_date = data.exam_date;
     if (data.session_time) exam.session_time = data.session_time;
+    if (data.grace_period_minutes !== undefined) exam.grace_period_minutes = Number(data.grace_period_minutes);
     if (data.sets) exam.sets_json = JSON.stringify(data.sets);
     if (data.google_sheet_url !== undefined) exam.google_sheet_url = data.google_sheet_url;
     if (data.google_sheet_webhook_url !== undefined) exam.google_sheet_webhook_url = data.google_sheet_webhook_url;
