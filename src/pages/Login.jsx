@@ -62,7 +62,16 @@ export default function Login() {
       const rooms = appStorage.getAvailableRooms();
       if (rooms && rooms.length > 0) {
         setAvailableRooms(rooms);
-        setRoomNumber(rooms[0].room_number);
+        if (!roomNumber) {
+          setRoomNumber(rooms[0].room_number);
+          setRoomPin(`${rooms[0].room_number}0`);
+        }
+      } else {
+        // If rooms not loaded, default to 901 with PIN 9010
+        if (!roomNumber) {
+          setRoomNumber('901');
+          setRoomPin('9010');
+        }
       }
     } catch (e) {
       console.error(e);
@@ -199,7 +208,11 @@ export default function Login() {
                       <button
                         key={rNo}
                         type="button"
-                        onClick={() => setRoomNumber(rNo)}
+                        onClick={() => {
+                          setRoomNumber(rNo);
+                          setRoomPin(`${rNo}0`);
+                          setError(null);
+                        }}
                         className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition border touch-target ${
                           roomNumber === rNo
                             ? 'bg-emerald-600 text-white border-emerald-500 shadow-card'

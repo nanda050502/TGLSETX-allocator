@@ -325,11 +325,48 @@ const SEED_ADMIN_USERS = [
 ];
 
 function generateSeedData() {
+  const defaultExamId = 'exam_batch_1';
+  const today = new Date().toISOString().split('T')[0];
+
+  const defaultExam = {
+    id: defaultExamId,
+    name: 'Batch 1 - Regular Session',
+    subject_code: 'CS8501',
+    exam_date: today,
+    session_time: '08:00 AM - 05:00 PM',
+    sets_json: JSON.stringify(['Set A', 'Set B', 'Set C', 'Set D']),
+    google_sheet_url: '',
+    google_sheet_webhook_url: '',
+    status: 'ACTIVE',
+    created_at: new Date().toISOString()
+  };
+
+  const defaultRooms = [
+    { id: 'room_901', exam_id: defaultExamId, room_number: '901', faculty_id: null, faculty_name: 'Prof. Alex', room_pin: '9010', current_set_index: 0, room_finalized: false, draft_counter: 0 },
+    { id: 'room_902', exam_id: defaultExamId, room_number: '902', faculty_id: null, faculty_name: 'Prof. David', room_pin: '9020', current_set_index: 0, room_finalized: false, draft_counter: 0 },
+    { id: 'room_903', exam_id: defaultExamId, room_number: '903', faculty_id: null, faculty_name: 'Prof. Sarah', room_pin: '9030', current_set_index: 0, room_finalized: false, draft_counter: 0 },
+    { id: 'room_904', exam_id: defaultExamId, room_number: '904', faculty_id: null, faculty_name: 'Prof. James', room_pin: '9040', current_set_index: 0, room_finalized: false, draft_counter: 0 },
+    { id: 'room_101', exam_id: defaultExamId, room_number: '101', faculty_id: null, faculty_name: 'Prof. Maria', room_pin: '1010', current_set_index: 0, room_finalized: false, draft_counter: 0 },
+    { id: 'room_102', exam_id: defaultExamId, room_number: '102', faculty_id: null, faculty_name: 'Prof. Robert', room_pin: '1020', current_set_index: 0, room_finalized: false, draft_counter: 0 },
+    { id: 'room_tp008', exam_id: defaultExamId, room_number: 'TP008', faculty_id: null, faculty_name: 'Prof. Emily', room_pin: 'TP0080', current_set_index: 0, room_finalized: false, draft_counter: 0 }
+  ];
+
+  const defaultStudents = [
+    { id: 'std_1', exam_id: defaultExamId, room_number: '901', roll_number: '21CS101', name: 'John Doe', email: 'john@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 },
+    { id: 'std_2', exam_id: defaultExamId, room_number: '901', roll_number: '21CS102', name: 'Jane Smith', email: 'jane@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 },
+    { id: 'std_3', exam_id: defaultExamId, room_number: '901', roll_number: '21CS103', name: 'Michael Brown', email: 'michael@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 },
+    { id: 'std_4', exam_id: defaultExamId, room_number: '901', roll_number: '21CS104', name: 'Emily Davis', email: 'emily@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 },
+    { id: 'std_5', exam_id: defaultExamId, room_number: '901', roll_number: '21CS105', name: 'William Wilson', email: 'william@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 },
+    { id: 'std_6', exam_id: defaultExamId, room_number: '901', roll_number: '21CS106', name: 'Sophia Taylor', email: 'sophia@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 },
+    { id: 'std_7', exam_id: defaultExamId, room_number: '101', roll_number: '21CS107', name: 'James Anderson', email: 'james@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 },
+    { id: 'std_8', exam_id: defaultExamId, room_number: 'TP008', roll_number: '21CS108', name: 'Olivia Martin', email: 'olivia@university.edu', department: 'CSE', batch_name: 'Batch 1 - Regular Session', assessment_time: '08:00 AM - 05:00 PM', exam_date: today, status: 'ABSENT', assigned_set: null, checkin_time: null, synced_to_sheet: 0 }
+  ];
+
   return {
     users: [...SEED_ADMIN_USERS],
-    exams: [],
-    rooms: [],
-    students: [],
+    exams: [defaultExam],
+    rooms: defaultRooms,
+    students: defaultStudents,
     attendance_logs: []
   };
 }
@@ -348,6 +385,7 @@ class AppStorage {
       try {
         this.db = JSON.parse(existing);
         this.ensureAdminUsers();
+        this.ensureSampleData();
         this.ensureUniversalRoomPins();
       } catch (e) {
         this.db = generateSeedData();
@@ -446,6 +484,28 @@ class AppStorage {
     }
   }
 
+  ensureSampleData() {
+    if (!this.db) return;
+    const seed = generateSeedData();
+
+    if (!Array.isArray(this.db.exams) || this.db.exams.length === 0) {
+      this.db.exams = seed.exams;
+      this.db.rooms = seed.rooms;
+      this.db.students = seed.students;
+      this.save();
+      return;
+    }
+
+    if (!Array.isArray(this.db.rooms) || this.db.rooms.length === 0) {
+      const activeExam = this.db.exams.find(e => e.status === 'ACTIVE' || e.status === 'MANUAL_ACTIVE') || this.db.exams[0];
+      this.db.rooms = seed.rooms.map(r => ({ ...r, exam_id: activeExam.id }));
+      if (!Array.isArray(this.db.students) || this.db.students.length === 0) {
+        this.db.students = seed.students.map(s => ({ ...s, exam_id: activeExam.id }));
+      }
+      this.save();
+    }
+  }
+
   ensureUniversalRoomPins() {
     if (!this.db || !Array.isArray(this.db.rooms)) return;
     let modified = false;
@@ -509,6 +569,20 @@ class AppStorage {
     if (!cleanRoom) return { success: false, error: 'Please enter a room number' };
     if (!cleanPin) return { success: false, error: `Invalid PIN for Room ${cleanRoom}` };
 
+    const universalPin = getUniversalRoomPin(cleanRoom);
+    const universalFallbackPin = '1234';
+    const legacySlicePin = cleanRoom.length > 4 ? cleanRoom.slice(-4) : `${cleanRoom}0`;
+    const digitsOnly = cleanRoom.replace(/\D/g, '');
+    const digitsPin = digitsOnly ? `${digitsOnly}0` : null;
+    const cleanPinLower = cleanPin.toLowerCase();
+
+    // Check if the entered PIN matches the universal standard for this room
+    const isUniversalPinMatch =
+      cleanPinLower === universalPin.toLowerCase() ||
+      cleanPinLower === universalFallbackPin ||
+      cleanPinLower === legacySlicePin.toLowerCase() ||
+      (digitsPin && cleanPinLower === digitsPin.toLowerCase());
+
     // 1. Search in the currently active exam
     let activeExam = this.getActiveExam();
     let room = activeExam
@@ -538,40 +612,59 @@ class AppStorage {
             this.switchActiveExam(candidateExam.id);
             activeExam = candidateExam;
             room = candidate;
-          } else if (candidateExam) {
+          } else if (candidateExam && !isUniversalPinMatch) {
             // Rule 2: Active Batch Requirement
             return {
               success: false,
               error: `Room ${cleanRoom} belongs to batch "${candidateExam.name}" which is currently ${candidateExam.status}. The room's batch must be marked as ACTIVE for room PIN logins to succeed.`
             };
+          } else if (candidateExam) {
+            this.switchActiveExam(candidateExam.id);
+            activeExam = candidateExam;
+            room = candidate;
           }
         }
       }
     }
 
+    // 3. Auto-provision room if missing and PIN is universal match
     if (!room) {
-      return { success: false, error: `Invalid PIN for Room ${cleanRoom}` };
+      if (isUniversalPinMatch) {
+        if (!activeExam) {
+          activeExam = this.getActiveExam();
+          if (!activeExam) {
+            const seed = generateSeedData();
+            this.db.exams = seed.exams;
+            this.save();
+            activeExam = this.db.exams[0];
+          }
+        }
+
+        const newRoomId = generateId();
+        room = {
+          id: newRoomId,
+          exam_id: activeExam.id,
+          room_number: cleanRoom,
+          faculty_id: null,
+          faculty_name: staffName?.trim() || `Invigilator (Room ${cleanRoom})`,
+          room_pin: universalPin,
+          current_set_index: 0,
+          room_finalized: false,
+          finalized_at: null,
+          draft_counter: 0
+        };
+        this.db.rooms.push(room);
+        this.save();
+        this.pushToCloud('rooms', [room]);
+      } else {
+        return { success: false, error: `Invalid PIN for Room ${cleanRoom}` };
+      }
     }
 
-    // Universal PIN Validation:
-    // Matches:
-    // 1. Stored room PIN (custom or auto-assigned)
-    // 2. Universal format: RoomNo + "0" (e.g. 101 -> 1010, 901 -> 9010, TP008 -> TP0080)
-    // 3. Universal fallback PIN: 1234
-    // 4. Legacy slice PIN: last 4 chars, or digits only + "0"
-    const universalPin = getUniversalRoomPin(room.room_number);
-    const universalFallbackPin = '1234';
-    const legacySlicePin = cleanRoom.length > 4 ? cleanRoom.slice(-4) : `${cleanRoom}0`;
-    const digitsOnly = cleanRoom.replace(/\D/g, '');
-    const digitsPin = digitsOnly ? `${digitsOnly}0` : null;
-
-    const enteredPinLower = cleanPin.toLowerCase();
+    // 4. Validate PIN against room's custom PIN or universal PIN
     const isPinMatch =
-      (room.room_pin && String(room.room_pin).trim().toLowerCase() === enteredPinLower) ||
-      universalPin.toLowerCase() === enteredPinLower ||
-      universalFallbackPin === enteredPinLower ||
-      legacySlicePin.toLowerCase() === enteredPinLower ||
-      (digitsPin && digitsPin.toLowerCase() === enteredPinLower);
+      (room.room_pin && String(room.room_pin).trim().toLowerCase() === cleanPinLower) ||
+      isUniversalPinMatch;
 
     if (!isPinMatch) {
       return { success: false, error: `Invalid PIN for Room ${cleanRoom}` };

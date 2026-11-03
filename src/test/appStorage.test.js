@@ -175,5 +175,24 @@ describe('AppStorage Class', () => {
       expect(result.success).toBe(true);
       expect(result.user.room_number).toBe('901');
     });
+
+    it('auto-provisions room on the fly if not in DB when universal PIN RoomNo+0 is entered', () => {
+      appStorage.db.exams = [];
+      appStorage.db.rooms = [];
+
+      const result = appStorage.roomPinLogin('901', '9010', 'Prof. Alex');
+      expect(result.success).toBe(true);
+      expect(result.user.room_number).toBe('901');
+      expect(result.user.role).toBe('FACULTY');
+    });
+
+    it('returns error if non-matching PIN entered for unprovisioned room', () => {
+      appStorage.db.exams = [];
+      appStorage.db.rooms = [];
+
+      const result = appStorage.roomPinLogin('901', '0000', 'Prof. Alex');
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Invalid PIN for Room 901');
+    });
   });
 });
